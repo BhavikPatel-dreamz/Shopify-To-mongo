@@ -2,7 +2,7 @@ import { gql } from 'graphql-request';
 
 export const productsQuery = gql`
   query fetchProducts($cursor: String) {
-    products(first: 100, after: $cursor) {
+    products(first: 250, after: $cursor) {
       pageInfo {
         hasNextPage
         endCursor
@@ -61,6 +61,7 @@ export const productsQuery = gql`
               node {
                 id
                 title
+                handle
               }
             }
           }

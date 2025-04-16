@@ -91,9 +91,19 @@ ProductSchema.index({
   description: 'text', 
   'attributes.color': 'text',
   'attributes.material': 'text',
+  'attributes.size': 'text',
+  'attributes.season': 'text',
+  'attributes.gender': 'text',
+  'attributes.style': 'text',
+  'attributes.pattern': 'text',
+  'attributes.fabric': 'text',
+  'attributes.fit': 'text',
+  'attributes.work': 'text',
+  'attributes.group': 'text',
   tags: 'text',
   brand: 'text',
   productGroup: 'text'
+
 });
 
 export default mongoose.model('Product', ProductSchema, 'shopify.products'); 

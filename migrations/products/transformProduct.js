@@ -10,7 +10,9 @@ function extractAttributes(product) {
     gender: null,
     style: null,
     pattern: null,
-    fit: null
+    fit: null,
+    brand: null
+
   };
 
   // Extract from options
@@ -21,7 +23,8 @@ function extractAttributes(product) {
         attributes.color = option.values[0];
       } else if (optionName.includes('size')) {
         attributes.size = option.values[0];
-      } // ... rest of the attribute extractions
+      } 
+    
     });
   }
 
@@ -43,6 +46,9 @@ function extractAttributes(product) {
       // ... attribute extractions from tags
     });
   }
+
+  attributes.brand = (product.vendor) ? product.vendor :'';
+  
 
   return attributes;
 }

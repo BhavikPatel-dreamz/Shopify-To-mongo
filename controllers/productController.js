@@ -33,7 +33,7 @@ const getProducts = async (req, res) => {
   try {
     const cacheKey = generateCacheKey(req.query);
     
-    // // Check if we have a valid cached response
+    // Check if we have a valid cached response
     // if (isCacheValid(cacheKey)) {
     //   console.log('Returning cached filter results');
     //   return res.json(filterCache.data[cacheKey]);
@@ -63,8 +63,10 @@ const getProducts = async (req, res) => {
       work
     } = req.query;
 
-    // Build filter query
-    const query = {};
+    // Build filter query - Always include isAvailable: true
+    const query = {
+      isAvailable: true  // This ensures we only get available products
+    };
 
     // Use vector search for longer search terms
     if (search && search.length >= 3) {
@@ -162,13 +164,6 @@ const getProducts = async (req, res) => {
       if (maxPrice) query.price.$lte = parseFloat(maxPrice);
     }
 
-    // Stock filter
-    if (inStock === 'true') {
-      query.isAvailable = true;
-    } else if (inStock === 'false') {
-      query.isAvailable = false;
-    }
-
     // Calculate pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -212,7 +207,7 @@ const getProducts = async (req, res) => {
       .limit(limitNum)
       .lean(); // Use lean() to get plain JavaScript objects
 
-    // Get total count for pagination
+    // Get total count of available products only
     const total = await Product.countDocuments(query);
 
     // Include productUrl in the response
@@ -239,14 +234,14 @@ const getProducts = async (req, res) => {
           season,
           minPrice, 
           maxPrice,
-          inStock,
           gender,
           productGroup,
           productType,
           brand,
           fabric,
           work
-        }
+        },
+        totalAvailableProducts: total // Add total count of available products
       }
     };
 
@@ -276,9 +271,12 @@ const getProductFilters = async (req, res) => {
     // Extract current filters from the request query
     const { tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work } = req.query;
 
-    // Build the query based on current filters
-    const query = {};
+    // Build the query - Always include isAvailable: true
+    const query = {
+      isAvailable: true  // This ensures we only get filters from available products
+    };
 
+    // Add other filters
     if (tags) {
       const tagArray = Array.isArray(tags) ? tags : [tags];
       query.tags = { $in: tagArray };
@@ -328,7 +326,10 @@ const getProductFilters = async (req, res) => {
       query['attributes.work'] = Array.isArray(work) ? { $in: work } : work;
     }
 
-    // Fetch distinct values for each filter based on the entire query
+    // Get total count of available products
+    const totalAvailableProducts = await Product.countDocuments({ isAvailable: true });
+
+    // Fetch distinct values for each filter based on available products only
     const categories = await Product.distinct('categories', query);
     const colors = await Product.distinct('attributes.color', query);
     const sizes = await Product.distinct('attributes.size', query);
@@ -341,7 +342,7 @@ const getProductFilters = async (req, res) => {
     const fabrics = await Product.distinct('attributes.fabric', query);
     const works = await Product.distinct('attributes.work', query);
 
-    // Calculate price range based on the entire query
+    // Calculate price range based on available products only
     const priceData = await Product.aggregate([
       { $match: query },
       {
@@ -357,10 +358,10 @@ const getProductFilters = async (req, res) => {
       ? { min: priceData[0].minPrice, max: priceData[0].maxPrice }
       : { min: 0, max: 1000 };
 
-    // Return the available filter options
     res.json({
       success: true,
       data: {
+        totalAvailableProducts,
         categories: categories.filter(Boolean),
         tags: tags ? tags.split(',') : [],
         attributes: {
