@@ -47,7 +47,7 @@ async function migrateProducts() {
   console.log('Starting product migration...');
   
   let hasNextPage = true;
-  let cursor = await getLastCursor() || 'eyJsYXN0X2lkIjo2NzAyMTE5ODEzMzE1LCJsYXN0X3ZhbHVlIjoiNjcwMjExOTgxMzMxNSJ9'; // Start with null for first run
+  let cursor = await getLastCursor();
   let totalProcessed = 0;
   
   // Log the starting point
