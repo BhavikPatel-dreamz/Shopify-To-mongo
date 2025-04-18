@@ -4,7 +4,7 @@ import cors from 'cors';
 import connectDB from './config/database.js';
 import routes from './routes/index.js';
 import webhookRoutes from './routes/webhookRoutes.js';
-import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
+//import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,7 +15,7 @@ connectDB();
 // Middleware
 app.use(cors());
 app.use(json());
-app.use(ipWhitelist); // Apply the IP whitelist middleware
+//app.use(ipWhitelist); // Apply the IP whitelist middleware
 
 // Routes
 app.use('/api', routes);

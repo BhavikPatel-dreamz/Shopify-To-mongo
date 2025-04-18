@@ -4,10 +4,11 @@ import verifyShopifyWebhook from '../middleware/verifyWebhook.js';
 
 const router = express.Router();
 
+
 // Product update webhook with verification
 router.post('/product-update', 
   express.raw({type: 'application/json'}),
-  verifyShopifyWebhook,
+  //verifyShopifyWebhook,
   handleProductUpdate
 );
 

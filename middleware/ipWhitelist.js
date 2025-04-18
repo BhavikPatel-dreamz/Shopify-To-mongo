@@ -1,5 +1,6 @@
 const allowedIPs = [
   '23.227.38.32',
+  '::ffff:192.168.0.106',
   '::1',
   '::ffff:127.0.0.1',
   '116.72.32.113',
@@ -11,7 +12,7 @@ const allowedIPs = [
 
 const ipWhitelist = (req, res, next) => {
   const clientIp = req.ip || req.connection.remoteAddress;
-  console.log(clientIp);
+  
 
   if (allowedIPs.includes(clientIp)) {
     return next();

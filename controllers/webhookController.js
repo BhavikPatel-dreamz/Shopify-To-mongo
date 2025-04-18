@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import { transformProduct } from '../migrations/products/transformProduct.js';
+import { transformWebhookProduct } from '../migrations/products/webhookTransform.js';
 
 /**
  * Handle product update webhook from Shopify
@@ -15,8 +16,10 @@ export const handleProductUpdate = async (req, res) => {
     // Get the raw product data from webhook
     const shopifyProduct = req.body;
 
+    
+
     // Transform the product data
-    const productData = transformProduct(shopifyProduct);
+    const productData = transformWebhookProduct(shopifyProduct);
 
     // Update or create the product in database
     await Product.findOneAndUpdate(
