@@ -60,7 +60,8 @@ const getProducts = async (req, res) => {
       productType,
       brand,
       fabric,
-      work
+      work,
+      collections
     } = req.query;
 
     // Build filter query - Always include isAvailable: true
@@ -112,6 +113,10 @@ const getProducts = async (req, res) => {
       query.categories = Array.isArray(category) ? { $in: category } : category;
     }
 
+    if (collections) {
+      query.collections = Array.isArray(collections) ? { $in: collections } : collections;
+    }
+
     if (tags) {
       const tagArray = Array.isArray(tags) ? tags : [tags];
       query.tags = { $in: tagArray };
@@ -140,6 +145,8 @@ const getProducts = async (req, res) => {
     if (productGroup) {
       query.productGroup = Array.isArray(productGroup) ? { $in: productGroup } : productGroup;
     }
+
+
 
     if (productType) {
       query.productType = Array.isArray(productType) ? { $in: productType } : productType;
@@ -341,6 +348,7 @@ const getProductFilters = async (req, res) => {
     const brands = await Product.distinct('brand', query);
     const fabrics = await Product.distinct('attributes.fabric', query);
     const works = await Product.distinct('attributes.work', query);
+    const availableCollections = await Product.distinct('collections', query);
 
     // Calculate price range based on available products only
     const priceData = await Product.aggregate([
@@ -363,6 +371,7 @@ const getProductFilters = async (req, res) => {
       data: {
         totalAvailableProducts,
         categories: categories.filter(Boolean),
+        Collections: availableCollections.filter(Boolean),
         tags: tags ? tags.split(',') : [],
         attributes: {
           colors: colors.filter(Boolean),

@@ -1,5 +1,4 @@
 import Product from '../models/Product.js';
-import { transformProduct } from '../migrations/products/transformProduct.js';
 import { transformWebhookProduct } from '../migrations/products/webhookTransform.js';
 
 /**
