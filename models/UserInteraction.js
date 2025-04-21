@@ -23,4 +23,4 @@ const UserInteractionSchema = new mongoose.Schema({
 // Compound index for efficient querying
 UserInteractionSchema.index({ userId: 1, productId: 1, interactionType: 1 });
 
-export default mongoose.model('UserInteraction', UserInteractionSchema, 'shopify.UserInteraction');    
+export default mongoose.model('UserInteraction', UserInteractionSchema, 'UserInteraction');    

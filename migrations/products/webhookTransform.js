@@ -67,6 +67,7 @@ export function transformWebhookProduct(webhookProduct) {
   // Transform to match our Product schema
   const transformedProduct = {
     productId: webhookProduct.id.toString(),
+    handle: webhookProduct.handle,
     shopifyId: webhookProduct.admin_graphql_api_id,
     name: webhookProduct.title,
     description: webhookProduct.body_html || '',

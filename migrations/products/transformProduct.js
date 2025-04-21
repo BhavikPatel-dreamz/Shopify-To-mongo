@@ -109,6 +109,7 @@ function transformProduct(shopifyProduct) {
   const transformedProduct = {
     productId: shopifyProduct.id.replace('gid://shopify/Product/', ''),
     shopifyId: shopifyProduct.id,
+    handle: shopifyProduct.handle,
     name: shopifyProduct.title,
     description: shopifyProduct.description || '',
     price: parseFloat(shopifyProduct.variants.edges[0]?.node.price) || 0,

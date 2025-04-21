@@ -16,4 +16,4 @@ const UserPreferenceSchema = new mongoose.Schema({
   }
 });
 
-export default mongoose.model('UserPreference', UserPreferenceSchema, 'shopify.UserPreference'); 
+export default mongoose.model('UserPreference', UserPreferenceSchema, 'UserPreference'); 

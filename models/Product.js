@@ -1,35 +1,40 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const ProductSchema = new mongoose.Schema({
   productId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+  },
+  handle: {
+    type: String,
+
+    unique: true,
   },
   shopifyId: {
     type: String,
-    unique: true
+    unique: true,
   },
   name: {
     type: String,
-    required: true
+    required: true,
   },
   description: {
     type: String,
-    required: true
+    required: true,
   },
   price: {
     type: Number,
-    required: true
+    required: true,
   },
   compareAtPrice: {
-    type: Number
+    type: Number,
   },
   categories: [String],
   tags: [String],
   structuredTags: {
     type: Map,
-    of: String
+    of: String,
   },
   brand: String,
   productGroup: String,
@@ -46,64 +51,67 @@ const ProductSchema = new mongoose.Schema({
     pattern: String,
     fit: String,
     fabric: String,
-    work: String
+    work: String,
   },
-  variants: [{
-    variantId: String,
-    title: String,
-    price: Number,
-    sku: String,
-    inventory: Number,
-    attributes: {
-      color: String,
-      size: String,
-      material: String
-    }
-  }],
-  images: [{
-    url: String,
-    alt: String
-  }],
+  variants: [
+    {
+      variantId: String,
+      title: String,
+      price: Number,
+      sku: String,
+      inventory: Number,
+      attributes: {
+        color: String,
+        size: String,
+        material: String,
+      },
+    },
+  ],
+  images: [
+    {
+      url: String,
+      alt: String,
+    },
+  ],
   imageUrl: String, // Main product image
   productUrl: String, // Add the product URL field
   isAvailable: {
     type: Boolean,
-    default: true
+    default: true,
   },
   hasEmbedding: {
     type: Boolean,
-    default: false
+    default: false,
   },
   vectorId: String, // Reference to the vector in Pinecone
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
 // Add text indexes for search
-ProductSchema.index({ 
-  name: 'text', 
-  description: 'text', 
-  'attributes.color': 'text',
-  'attributes.material': 'text',
-  'attributes.size': 'text',
-  'attributes.season': 'text',
-  'attributes.gender': 'text',
-  'attributes.style': 'text',
-  'attributes.pattern': 'text',
-  'attributes.fabric': 'text',
-  'attributes.fit': 'text',
-  'attributes.work': 'text',
-  'attributes.group': 'text',
-  tags: 'text',
-  brand: 'text',
-  productGroup: 'text'
-
+ProductSchema.index({
+  name: "text",
+  description: "text",
+  "attributes.color": "text",
+  "attributes.material": "text",
+  "attributes.size": "text",
+  "attributes.season": "text",
+  "attributes.gender": "text",
+  "attributes.style": "text",
+  "attributes.pattern": "text",
+  "attributes.fabric": "text",
+  "attributes.fit": "text",
+  "attributes.work": "text",
+  "attributes.group": "text",
+  tags: "text",
+  brand: "text",
+  productGroup: "text",
 });
 
-export default mongoose.model('Product', ProductSchema, 'shopify.products'); 
+export default mongoose.model("Product", ProductSchema, "products");
