@@ -1,0 +1,70 @@
+name: Safe Deploy Node.js App to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Zip Project
+        run: zip -r app.zip . -x "*.git*" "node_modules/*" "*.github/*"
+
+      - name: Upload to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "app.zip"
+          target: "/home/${{ secrets.EC2_USER }}/"
+
+      - name: Safe Deploy on EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            # Define paths
+            LIVE_DIR="/var/www/html/Node/Products-serch"
+            TEMP_DIR="/var/www/html/Node/Products-serch-temp"
+
+            # Clean up any old temp deployment
+            sudo rm -rf $TEMP_DIR
+
+            echo "Creating temporary deployment directory..."
+            sudo mkdir -p $TEMP_DIR
+
+            echo "Unzipping project..."
+            sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
+
+            echo "Installing dependencies in temp..."
+            cd $TEMP_DIR
+            npm install --production || { echo "Install failed. Aborting deploy."; exit 1; }
+
+            echo "Replacing live app with new version..."
+            sudo rm -rf $LIVE_DIR
+            sudo mv $TEMP_DIR $LIVE_DIR
+
+            echo "Restarting app with PM2..."
+            cd $LIVE_DIR
+            pm2 restart Products-serch || pm2 start server.js --name "Products-serch"
+
+            echo "Deployment successful."
