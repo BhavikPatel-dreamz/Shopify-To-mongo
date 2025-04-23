@@ -57,7 +57,7 @@ jobs:
 
             echo "Installing dependencies in temp..."
             cd $TEMP_DIR
-            npm install --production || { echo "Install failed. Aborting deploy."; exit 1; }
+            npm install || { echo "Install failed. Aborting deploy."; exit 1; }
 
             echo "Replacing live app with new version..."
             sudo rm -rf $LIVE_DIR
