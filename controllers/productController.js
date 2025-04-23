@@ -24,6 +24,16 @@ const isCacheValid = (key) => {
   return (now - timestamp) < filterCache.timeout;
 };
 
+// Update the helper function to handle comma-separated values
+const createCaseInsensitivePatterns = (values) => {
+  if (typeof values === 'string') {
+    // Split comma-separated values
+    values = values.split(',').map(v => v.trim());
+  }
+  const valueArray = Array.isArray(values) ? values : [values];
+  return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
+};
+
 /**
  * Get products with filtering, sorting, and pagination
  * @param {Object} req - Express request object
@@ -108,61 +118,61 @@ const getProducts = async (req, res) => {
       ];
     }
 
-    // Apply filters based on tags and attributes
+    // Apply filters with case-insensitive matching
     if (category) {
-      query.categories = Array.isArray(category) ? { $in: category } : category;
+      query.categories = { $in: createCaseInsensitivePatterns(category) };
     }
 
     if (collections) {
-      query.collections = Array.isArray(collections) ? { $in: collections } : collections;
+      query.collections = { $in: createCaseInsensitivePatterns(collections) };
     }
 
     if (tags) {
-      const tagArray = Array.isArray(tags) ? tags : [tags];
-      query.tags = { $in: tagArray };
+      query.tags = { $in: createCaseInsensitivePatterns(tags) };
     }
 
     if (color) {
-      query['attributes.color'] = Array.isArray(color) ? { $in: color } : color;
+      query['attributes.color'] = { $in: createCaseInsensitivePatterns(color) };
     }
     
     if (size) {
-      query['attributes.size'] = Array.isArray(size) ? { $in: size } : size;
+      query['attributes.size'] = { $in: createCaseInsensitivePatterns(size) };
     }
     
     if (material) {
-      query['attributes.material'] = Array.isArray(material) ? { $in: material } : material;
+      query['attributes.material'] = { $in: createCaseInsensitivePatterns(material) };
     }
     
     if (season) {
-      query['attributes.season'] = Array.isArray(season) ? { $in: season } : season;
+      query['attributes.season'] = { $in: createCaseInsensitivePatterns(season) };
     }
 
     if (gender) {
-      query['attributes.gender'] = Array.isArray(gender) ? { $in: gender } : gender;
+      query['attributes.gender'] = { $in: createCaseInsensitivePatterns(gender) };
     }
 
     if (productGroup) {
-      query.productGroup = Array.isArray(productGroup) ? { $in: productGroup } : productGroup;
+      query.productGroup = { $in: createCaseInsensitivePatterns(productGroup) };
     }
 
-
-
     if (productType) {
-      query.productType = Array.isArray(productType) ? { $in: productType } : productType;
+      query.productType = { $in: createCaseInsensitivePatterns(productType) };
     }
 
     if (brand) {
-      query.brand = Array.isArray(brand) ? { $in: brand } : brand;
+      query.brand = { $in: createCaseInsensitivePatterns(brand) };
     }
 
     if (fabric) {
-      query['attributes.fabric'] = Array.isArray(fabric) ? { $in: fabric } : fabric;
+      query['attributes.fabric'] = { $in: createCaseInsensitivePatterns(fabric) };
     }
 
     if (work) {
-      query['attributes.work'] = Array.isArray(work) ? { $in: work } : work;
+      query['attributes.work'] = { $in: createCaseInsensitivePatterns(work) };
     }
+
+
+    console.log('Query:', query);
 
     // Price range filter
     if (minPrice || maxPrice) {
@@ -276,7 +286,7 @@ const getProducts = async (req, res) => {
 const getProductFilters = async (req, res) => {
   try {
     // Extract current filters from the request query
-    const { tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work } = req.query;
+    const { collections,tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work } = req.query;
 
     // Build the query - Always include isAvailable: true
     const query = {
@@ -285,52 +295,55 @@ const getProductFilters = async (req, res) => {
 
     // Add other filters
     if (tags) {
-      const tagArray = Array.isArray(tags) ? tags : [tags];
-      query.tags = { $in: tagArray };
+      query.tags = { $in: createCaseInsensitivePatterns(tags) };
     }
 
     if (category) {
-      query.categories = Array.isArray(category) ? { $in: category } : category;
+      query.categories = { $in: createCaseInsensitivePatterns(category) };
     }
 
     if (color) {
-      query['attributes.color'] = Array.isArray(color) ? { $in: color } : color;
+      query['attributes.color'] = { $in: createCaseInsensitivePatterns(color) };
     }
 
     if (size) {
-      query['attributes.size'] = Array.isArray(size) ? { $in: size } : size;
+      query['attributes.size'] = { $in: createCaseInsensitivePatterns(size) };
     }
 
     if (material) {
-      query['attributes.material'] = Array.isArray(material) ? { $in: material } : material;
+      query['attributes.material'] = { $in: createCaseInsensitivePatterns(material) };
     }
 
     if (season) {
-      query['attributes.season'] = Array.isArray(season) ? { $in: season } : season;
+      query['attributes.season'] = { $in: createCaseInsensitivePatterns(season) };
     }
 
     if (gender) {
-      query['attributes.gender'] = Array.isArray(gender) ? { $in: gender } : gender;
+      query['attributes.gender'] = { $in: createCaseInsensitivePatterns(gender) };
     }
 
     if (productGroup) {
-      query.productGroup = Array.isArray(productGroup) ? { $in: productGroup } : productGroup;
+      query.productGroup = { $in: createCaseInsensitivePatterns(productGroup) };
     }
 
     if (productType) {
-      query.productType = Array.isArray(productType) ? { $in: productType } : productType;
+      query.productType = { $in: createCaseInsensitivePatterns(productType) };
     }
 
     if (brand) {
-      query.brand = Array.isArray(brand) ? { $in: brand } : brand;
+      query.brand = { $in: createCaseInsensitivePatterns(brand) };
     }
 
     if (fabric) {
-      query['attributes.fabric'] = Array.isArray(fabric) ? { $in: fabric } : fabric;
+      query['attributes.fabric'] = { $in: createCaseInsensitivePatterns(fabric) };
     }
 
     if (work) {
-      query['attributes.work'] = Array.isArray(work) ? { $in: work } : work;
+      query['attributes.work'] = { $in: createCaseInsensitivePatterns(work) };
+    }
+
+    if (collections) {
+      query.collections = { $in: createCaseInsensitivePatterns(collections) };
     }
 
     // Get total count of available products
@@ -371,7 +384,7 @@ const getProductFilters = async (req, res) => {
       data: {
         totalAvailableProducts,
         categories: categories.filter(Boolean),
-        Collections: availableCollections.filter(Boolean),
+        collections: availableCollections.filter(Boolean),
         tags: tags ? tags.split(',') : [],
         attributes: {
           colors: colors.filter(Boolean),

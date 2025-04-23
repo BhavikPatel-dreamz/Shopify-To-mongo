@@ -19,7 +19,7 @@ async function getLastCursor() {
     console.error('Error fetching last cursor:', error);
     return null;
   }
-}
+} 
 
 /**
  * Update the cursor state
@@ -43,7 +43,7 @@ async function updateCursorState(cursor, totalProcessed) {
 /**
  * Main migration function with pagination
  */
-async function migrateProducts() {
+async function migrateProducts() { 
   console.log('Starting product migration...');
   
   let hasNextPage = true;
