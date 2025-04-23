@@ -1,82 +1,50 @@
-name: Safe Deploy Node.js App to AWS EC2
+- name: Safe Deploy on EC2
+  uses: appleboy/ssh-action@v1.0.0
+  with:
+    host: ${{ secrets.EC2_HOST }}
+    username: ${{ secrets.EC2_USER }}
+    key: ${{ secrets.EC2_SSH_KEY }}
+    script: |
+      set -e
 
-on:
-  push:
-    branches:
-      - main
+      LIVE_DIR="/var/www/html/Node/Products-serch"
+      TEMP_DIR="/home/ubuntu/simpleandshober"
+      BACKUP_ENV="/tmp/env_backup"
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+      # Backup existing .env if it exists
+      if [ -f "$LIVE_DIR/.env" ]; then
+        echo "Backing up existing .env..."
+        cp $LIVE_DIR/.env $BACKUP_ENV
+      fi
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      echo "Cleaning temp directory..."
+      sudo rm -rf $TEMP_DIR
+      sudo mkdir -p $TEMP_DIR
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
+      echo "Unzipping new project to temp..."
+      sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
+      sudo chmod -R 777 $TEMP_DIR
 
-      - name: Install Dependencies
-        run: npm install
+      # Load environment so node/npm work
+      source ~/.bashrc || true
+      source ~/.nvm/nvm.sh || true
 
-      - name: Zip Project
-        run: zip -r app.zip . -x "*.git*" "node_modules/*" "*.github/*"
+      echo "Installing dependencies..."
+      cd $TEMP_DIR
+      npm install --production --verbose || { echo "Install failed. Aborting deploy."; exit 1; }
 
-      - name: Upload to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "app.zip"
-          target: "/home/${{ secrets.EC2_USER }}/"
+      echo "Deploying to live folder..."
+      sudo rm -rf $LIVE_DIR
+      sudo mv $TEMP_DIR $LIVE_DIR
 
-      - name: Safe Deploy on EC2
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
+      # Restore .env
+      if [ -f "$BACKUP_ENV" ]; then
+        echo "Restoring .env file..."
+        mv $BACKUP_ENV $LIVE_DIR/.env
+      fi
 
-            # Define paths
-            LIVE_DIR="/var/www/html/Node/Products-serch"
-            TEMP_DIR="/home/ubuntu/simpleandshober"
+      echo "Restarting app with PM2..."
+      cd $LIVE_DIR
+      pm2 restart Products-serch || pm2 start server.js --name "Products-serch"
 
-            # Clean up any old temp deployment
-            sudo rm -rf $TEMP_DIR
-
-            echo "Creating temporary deployment directory..."
-            sudo mkdir -p $TEMP_DIR
-
-            echo "Unzipping project..."
-            sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
-            sudo chmod -R 777 $TEMP_DIR
-
-            echo "Go to temp directory and install dependencies..."
-
-            # Load Node.js if it's installed via NVM or similar
-            source ~/.bashrc || true
-            source ~/.nvm/nvm.sh || true
-
-            cd $TEMP_DIR
-            which node || echo "Node not found"
-            which npm || echo "npm not found"
-            node -v || true
-            npm -v || true
-
-            echo "Installing dependencies..."
-            npm install --production --verbose || { echo "Install failed. Aborting deploy."; exit 1; }
-
-            echo "Replacing live app with new version..."
-            sudo rm -rf $LIVE_DIR
-            sudo mv $TEMP_DIR $LIVE_DIR
-
-            echo "Restarting app with PM2..."
-            cd $LIVE_DIR
-            pm2 restart Products-serch || pm2 start server.js --name "Products-serch"
-
-            echo "Deployment successful."
+      echo "✅ Deployment successful (with .env preserved)"
