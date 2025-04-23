@@ -54,6 +54,7 @@ jobs:
 
             echo "Unzipping project..."
             sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
+            sudo chmod -R 777 /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
 
             echo "Installing dependencies in temp..."
             cd $TEMP_DIR
