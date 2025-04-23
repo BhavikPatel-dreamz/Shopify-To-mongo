@@ -44,7 +44,7 @@ jobs:
 
             # Define paths
             LIVE_DIR="/var/www/html/Node/Products-serch"
-            TEMP_DIR="/var/www/html/Node/Products-serch-temp"
+            TEMP_DIR="/home/ubuntu/Products-serch-temp"
 
             # Clean up any old temp deployment
             sudo rm -rf $TEMP_DIR
