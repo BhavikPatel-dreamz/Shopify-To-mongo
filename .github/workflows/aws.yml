@@ -1,50 +1,85 @@
-- name: Safe Deploy on EC2
-  uses: appleboy/ssh-action@v1.0.0
-  with:
-    host: ${{ secrets.EC2_HOST }}
-    username: ${{ secrets.EC2_USER }}
-    key: ${{ secrets.EC2_SSH_KEY }}
-    script: |
-      set -e
+name: Safe Deploy Node.js App to AWS EC2
 
-      LIVE_DIR="/var/www/html/Node/Products-serch"
-      TEMP_DIR="/home/ubuntu/simpleandshober"
-      BACKUP_ENV="/tmp/env_backup"
+on:
+  push:
+    branches:
+      - main
 
-      # Backup existing .env if it exists
-      if [ -f "$LIVE_DIR/.env" ]; then
-        echo "Backing up existing .env..."
-        cp $LIVE_DIR/.env $BACKUP_ENV
-      fi
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-      echo "Cleaning temp directory..."
-      sudo rm -rf $TEMP_DIR
-      sudo mkdir -p $TEMP_DIR
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      echo "Unzipping new project to temp..."
-      sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
-      sudo chmod -R 777 $TEMP_DIR
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
 
-      # Load environment so node/npm work
-      source ~/.bashrc || true
-      source ~/.nvm/nvm.sh || true
+      - name: Install Dependencies
+        run: npm install
 
-      echo "Installing dependencies..."
-      cd $TEMP_DIR
-      npm install --production --verbose || { echo "Install failed. Aborting deploy."; exit 1; }
+      - name: Zip Project
+        run: zip -r app.zip . -x "*.git*" "node_modules/*" "*.github/*"
 
-      echo "Deploying to live folder..."
-      sudo rm -rf $LIVE_DIR
-      sudo mv $TEMP_DIR $LIVE_DIR
+      - name: Upload to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "app.zip"
+          target: "/home/${{ secrets.EC2_USER }}/"
 
-      # Restore .env
-      if [ -f "$BACKUP_ENV" ]; then
-        echo "Restoring .env file..."
-        mv $BACKUP_ENV $LIVE_DIR/.env
-      fi
+      - name: Safe Deploy on EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
 
-      echo "Restarting app with PM2..."
-      cd $LIVE_DIR
-      pm2 restart Products-serch || pm2 start server.js --name "Products-serch"
+            LIVE_DIR="/var/www/html/Node/Products-serch"
+            TEMP_DIR="/home/ubuntu/simpleandshober"
+            BACKUP_ENV="/tmp/env_backup"
 
-      echo "✅ Deployment successful (with .env preserved)"
+            # Backup existing .env if it exists
+            if [ -f "$LIVE_DIR/.env" ]; then
+              echo "Backing up existing .env..."
+              cp $LIVE_DIR/.env $BACKUP_ENV
+            fi
+
+            echo "Cleaning temp directory..."
+            sudo rm -rf $TEMP_DIR
+            sudo mkdir -p $TEMP_DIR
+
+            echo "Unzipping new project to temp..."
+            sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
+            sudo chmod -R 777 $TEMP_DIR
+
+            # Load environment so node/npm work
+            source ~/.bashrc || true
+            source ~/.nvm/nvm.sh || true
+
+            echo "Installing dependencies..."
+            cd $TEMP_DIR
+            npm install --production --verbose || { echo "Install failed. Aborting deploy."; exit 1; }
+
+            echo "Deploying to live folder..."
+            sudo rm -rf $LIVE_DIR
+            sudo mv $TEMP_DIR $LIVE_DIR
+
+            # Restore .env
+            if [ -f "$BACKUP_ENV" ]; then
+              echo "Restoring .env file..."
+              mv $BACKUP_ENV $LIVE_DIR/.env
+            fi
+
+            echo "Restarting app with PM2..."
+            cd $LIVE_DIR
+            pm2 restart Products-serch || pm2 start server.js --name "Products-serch"
+
+            echo "✅ Deployment successful (with .env preserved)"
