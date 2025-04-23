@@ -44,7 +44,7 @@ jobs:
 
             # Define paths
             LIVE_DIR="/var/www/html/Node/Products-serch"
-            TEMP_DIR="/home/ubuntu/simpleandshober/"
+            TEMP_DIR="/home/ubuntu/simpleandshober"
 
             # Clean up any old temp deployment
             sudo rm -rf $TEMP_DIR
@@ -56,9 +56,19 @@ jobs:
             sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
             sudo chmod -R 777 $TEMP_DIR
 
-            echo "go to dependencies in temp..."
+            echo "Go to temp directory and install dependencies..."
+
+            # Load Node.js if it's installed via NVM or similar
+            source ~/.bashrc || true
+            source ~/.nvm/nvm.sh || true
+
             cd $TEMP_DIR
-            echo "Installing dependencies in temp..."
+            which node || echo "Node not found"
+            which npm || echo "npm not found"
+            node -v || true
+            npm -v || true
+
+            echo "Installing dependencies..."
             npm install --production --verbose || { echo "Install failed. Aborting deploy."; exit 1; }
 
             echo "Replacing live app with new version..."
