@@ -125,6 +125,14 @@ ProductSchema.index({ isAvailable: 1, "attributes.size": 1 }); // For size filte
 ProductSchema.index({ isAvailable: 1, "attributes.gender": 1 }); // For gender filtering
 ProductSchema.index({ isAvailable: 1, "attributes.style": 1 }); // For style filtering
 ProductSchema.index({ isAvailable: 1, collections: 1 }); // For collections filtering
+ProductSchema.index({ isAvailable: 1, "attributes.group": 1 }); // For group filtering
+ProductSchema.index({ isAvailable: 1, "attributes.material": 1 }); // For material filtering
+ProductSchema.index({ isAvailable: 1, "attributes.season": 1 }); // For season filtering
+ProductSchema.index({ isAvailable: 1, "attributes.fabric": 1 }); // For fabric filtering
+ProductSchema.index({ isAvailable: 1, "attributes.fit": 1 }); // For fit filtering
+ProductSchema.index({ isAvailable: 1, "attributes.work": 1 }); // For work filtering
+ProductSchema.index({ isAvailable: 1, "attributes.pattern": 1 }); // For pattern filtering
+
 
 // Add compound index for price range queries
 ProductSchema.index({ isAvailable: 1, price: 1, createdAt: -1 });
