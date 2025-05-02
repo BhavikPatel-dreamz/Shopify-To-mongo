@@ -10,6 +10,8 @@ const filterCache = {
   timestamps: {}
 };
 
+
+
 // Helper function to generate cache key from query parameters
 const generateCacheKey = (queryParams) => {
   return JSON.stringify(queryParams || {});
@@ -22,6 +24,14 @@ const isCacheValid = (key) => {
   const timestamp = filterCache.timestamps[key] || 0;
   const now = Date.now();
   return (now - timestamp) < filterCache.timeout;
+};
+
+const isCacheValidObject = (key) => {
+  if (!filterCacheObject.data[key]) return false;
+  
+  const timestamp = filterCacheObject.timestamps[key] || 0;
+  const now = Date.now();
+  return (now - timestamp) < filterCacheObject.timeout;
 };
 
 // Update the helper function to handle comma-separated values
@@ -300,9 +310,9 @@ const getProductFilters = async (req, res) => {
     const cacheKey = generateCacheKey(req.query);
     
     // Check if we have a valid cached response
-    if (isCacheValid(cacheKey)) {
+    if (isCacheValidObject(cacheKey)) {
       console.log('Returning cached Product Filter results');
-      return res.json(filterCache.data[cacheKey]);
+      return res.json(filterCacheObject.data[cacheKey]);
     }
 
     // Extract current filters from the request query
@@ -431,8 +441,8 @@ const getProductFilters = async (req, res) => {
     }
 
       
-    filterCache.data[cacheKey] = response;
-      filterCache.timestamps[cacheKey] = Date.now();
+    filterCacheObject.data[cacheKey] = response;
+      filterCacheObject.timestamps[cacheKey] = Date.now();
 
 
   } catch (error) {
