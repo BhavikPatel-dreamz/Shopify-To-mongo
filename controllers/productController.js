@@ -44,10 +44,10 @@ const getProducts = async (req, res) => {
     const cacheKey = generateCacheKey(req.query);
     
     // Check if we have a valid cached response
-    // if (isCacheValid(cacheKey)) {
-    //   console.log('Returning cached filter results');
-    //   return res.json(filterCache.data[cacheKey]);
-    // }
+    if (isCacheValid(cacheKey)) {
+      console.log('Returning cached filter results');
+      return res.json(filterCache.data[cacheKey]);
+    }
 
     // Extract query parameters
     const {
@@ -284,7 +284,18 @@ const getProducts = async (req, res) => {
  * @param {Object} res - Express response object
  */
 const getProductFilters = async (req, res) => {
+
+
+  
   try {
+    const cacheKey = generateCacheKey(req.query);
+    
+    // Check if we have a valid cached response
+    if (isCacheValid(cacheKey)) {
+      console.log('Returning cached Product Filter results');
+      return res.json(filterCache.data[cacheKey]);
+    }
+
     // Extract current filters from the request query
     const { collections,tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work } = req.query;
 
@@ -379,7 +390,11 @@ const getProductFilters = async (req, res) => {
       ? { min: priceData[0].minPrice, max: priceData[0].maxPrice }
       : { min: 0, max: 1000 };
 
-    res.json({
+
+      
+
+
+    const response = {
       success: true,
       data: {
         totalAvailableProducts,
@@ -399,8 +414,14 @@ const getProductFilters = async (req, res) => {
         productTypes: productTypes.filter(Boolean),
         brands: brands.filter(Boolean),
         priceRange
-      }
-    });
+      } 
+    }
+
+      
+    filterCache.data[cacheKey] = response;
+      filterCache.timestamps[cacheKey] = Date.now();
+
+
   } catch (error) {
     console.error('Error fetching product filters:', error);
     res.status(500).json({
