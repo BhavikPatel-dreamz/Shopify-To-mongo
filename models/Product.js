@@ -114,4 +114,36 @@ ProductSchema.index({
   productGroup: "text",
 });
 
+// Add compound indexes for common query patterns
+ProductSchema.index({ isAvailable: 1, createdAt: -1 }); // For default sorting
+ProductSchema.index({ isAvailable: 1, price: 1 }); // For price sorting
+ProductSchema.index({ isAvailable: 1, name: 1 }); // For name sorting
+ProductSchema.index({ isAvailable: 1, brand: 1 }); // For brand filtering
+ProductSchema.index({ isAvailable: 1, productGroup: 1 }); // For product group filtering
+ProductSchema.index({ isAvailable: 1, "attributes.color": 1 }); // For color filtering
+ProductSchema.index({ isAvailable: 1, "attributes.size": 1 }); // For size filtering
+ProductSchema.index({ isAvailable: 1, "attributes.gender": 1 }); // For gender filtering
+ProductSchema.index({ isAvailable: 1, "attributes.style": 1 }); // For style filtering
+ProductSchema.index({ isAvailable: 1, collections: 1 }); // For collections filtering
+
+// Add compound index for price range queries
+ProductSchema.index({ isAvailable: 1, price: 1, createdAt: -1 });
+
+// Add compound index for category and tag filtering
+ProductSchema.index({ isAvailable: 1, categories: 1 });
+ProductSchema.index({ isAvailable: 1, tags: 1 });
+
+// Add compound index for multiple attribute filtering
+ProductSchema.index({ 
+  isAvailable: 1, 
+  "attributes.color": 1, 
+  "attributes.size": 1, 
+  "attributes.gender": 1 
+});
+
+// Add index for productId and handle for quick lookups
+ProductSchema.index({ productId: 1 }, { unique: true });
+ProductSchema.index({ handle: 1 }, { unique: true });
+ProductSchema.index({ shopifyId: 1 }, { unique: true });
+
 export default mongoose.model("Product", ProductSchema, "products");
