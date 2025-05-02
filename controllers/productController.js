@@ -152,12 +152,6 @@ const getProducts = async (req, res) => {
       query['attributes.gender'] = { $in: createCaseInsensitivePatterns(gender) };
     }
 
-    if (style) {
-      query['attributes.style'] = { $in: createCaseInsensitivePatterns(style) 
-
-    };
-
-
     if (productGroup) {
       query.productGroup = { $in: createCaseInsensitivePatterns(productGroup) };
     }
@@ -178,6 +172,13 @@ const getProducts = async (req, res) => {
       query['attributes.work'] = { $in: createCaseInsensitivePatterns(work) };
     }
 
+
+    if (style) {
+      query['attributes.style'] = { $in: createCaseInsensitivePatterns(style) };
+    }
+
+
+    
 
     console.log('Query:', query);
 
@@ -264,7 +265,7 @@ const getProducts = async (req, res) => {
           brand,
           fabric,
           work,
-          style 
+          style
         },
         totalAvailableProducts: total // Add total count of available products
       }
@@ -305,7 +306,7 @@ const getProductFilters = async (req, res) => {
     }
 
     // Extract current filters from the request query
-    const {style, collections,tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work } = req.query;
+    const { collections,tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work, style   } = req.query;
 
     // Build the query - Always include isAvailable: true
     const query = {
@@ -337,10 +338,6 @@ const getProductFilters = async (req, res) => {
       query['attributes.season'] = { $in: createCaseInsensitivePatterns(season) };
     }
 
-    if (style) {
-      query['attributes.style'] = { $in: createCaseInsensitivePatterns(style) };
-    }
-
     if (gender) {
       query['attributes.gender'] = { $in: createCaseInsensitivePatterns(gender) };
     }
@@ -367,6 +364,10 @@ const getProductFilters = async (req, res) => {
 
     if (collections) {
       query.collections = { $in: createCaseInsensitivePatterns(collections) };
+    }
+
+    if (style) {
+      query['attributes.style'] = { $in: createCaseInsensitivePatterns(style) };
     }
 
     // Get total count of available products
@@ -420,8 +421,7 @@ const getProductFilters = async (req, res) => {
           seasons: seasons.filter(Boolean),
           genders: genders.filter(Boolean),
           fabrics: fabrics.filter(Boolean),
-          works: works.filter(Boolean),
-          styles: style.filter(Boolean)
+          works: works.filter(Boolean)
         },
         productGroups: productGroups.filter(Boolean),
         productTypes: productTypes.filter(Boolean),
