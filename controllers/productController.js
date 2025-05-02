@@ -10,6 +10,12 @@ const filterCache = {
   timestamps: {}
 };
 
+const filterCacheObject = {
+  data: {},
+  timeout: 60 * 60 * 1000, // 100 minutes cache timeout
+  timestamps: {}
+};
+
 
 
 // Helper function to generate cache key from query parameters
