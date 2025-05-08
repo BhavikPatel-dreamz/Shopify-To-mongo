@@ -154,6 +154,22 @@ ProductSchema.index({ productId: 1 }, { unique: true });
 ProductSchema.index({ handle: 1 }, { unique: true });
 ProductSchema.index({ shopifyId: 1 }, { unique: true });
 
+// Add indexes for filter fields
+ProductSchema.index({ isAvailable: 1 });
+ProductSchema.index({ categories: 1 });
+ProductSchema.index({ 'attributes.color': 1 });
+ProductSchema.index({ 'attributes.size': 1 });
+ProductSchema.index({ 'attributes.material': 1 });
+ProductSchema.index({ 'attributes.season': 1 });
+ProductSchema.index({ 'attributes.gender': 1 });
+ProductSchema.index({ productGroup: 1 });
+ProductSchema.index({ productType: 1 });
+ProductSchema.index({ brand: 1 });
+ProductSchema.index({ 'attributes.fabric': 1 });
+ProductSchema.index({ 'attributes.work': 1 });
+ProductSchema.index({ collections: 1 });
+ProductSchema.index({ price: 1 });
+
 ProductSchema.pre('save', function (next) {
   if (this.collections && Array.isArray(this.collections)) {
     this.collections = this.collections.map(c =>
