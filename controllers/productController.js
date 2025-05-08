@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
+import { queryPatternTracker } from '../models/Product.js';
 
 
 
@@ -384,6 +385,9 @@ const getProductFilters = async (req, res) => {
     if (style) {
       query['attributes.style'] = { $in: createCaseInsensitivePatterns(style) };
     }
+
+    // Track this query pattern for dynamic indexing
+    queryPatternTracker.trackQuery(query);
 
     // Get total count of available products
     const totalAvailableProducts = await Product.countDocuments({ isAvailable: true });

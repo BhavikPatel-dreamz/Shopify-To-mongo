@@ -179,4 +179,66 @@ ProductSchema.pre('save', function (next) {
   next();
 });
 
+// Function to create dynamic indexes based on query patterns
+const createDynamicIndex = async (queryPattern) => {
+  try {
+    const indexFields = { isAvailable: 1 };
+    
+    // Add fields from query pattern to index
+    Object.keys(queryPattern).forEach(field => {
+      if (field.startsWith('attributes.')) {
+        indexFields[field] = 1;
+      } else if (field === 'categories' || field === 'collections' || field === 'tags') {
+        indexFields[field] = 1;
+      } else if (field === 'price') {
+        indexFields[field] = 1;
+      } else if (field === 'brand' || field === 'productGroup' || field === 'productType') {
+        indexFields[field] = 1;
+      }
+    });
+
+    // Create index name based on fields
+    const indexName = Object.keys(indexFields).join('_');
+    
+    // Check if index already exists
+    const existingIndexes = await mongoose.model('Product').collection.indexes();
+    const indexExists = existingIndexes.some(index => 
+      index.name === indexName || 
+      JSON.stringify(index.key) === JSON.stringify(indexFields)
+    );
+
+    if (!indexExists) {
+      await mongoose.model('Product').collection.createIndex(indexFields, {
+        name: indexName,
+        background: true // Create index in background
+      });
+      console.log(`Created new index: ${indexName}`);
+    }
+
+    return indexName;
+  } catch (error) {
+    console.error('Error creating dynamic index:', error);
+    return null;
+  }
+};
+
+// Function to track query patterns
+const queryPatternTracker = {
+  patterns: new Map(),
+  threshold: 100, // Number of times a pattern must be seen before creating an index
+  
+  trackQuery: function(query) {
+    const patternKey = JSON.stringify(query);
+    const count = (this.patterns.get(patternKey) || 0) + 1;
+    this.patterns.set(patternKey, count);
+    
+    if (count === this.threshold) {
+      createDynamicIndex(JSON.parse(patternKey));
+    }
+  }
+};
+
+// Export the functions
+export { createDynamicIndex, queryPatternTracker };
+
 export default mongoose.model("Product", ProductSchema, "products");
