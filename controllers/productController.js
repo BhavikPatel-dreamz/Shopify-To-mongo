@@ -142,7 +142,7 @@ const getProducts = async (req, res) => {
 
     if (collections) {
       const collectionArray = collections.replaceAll('-', ' ').split(',');
-      query.collections = { $in: collectionArray };
+      query.collections = { $in: createCaseInsensitivePatterns(collectionArray) };
     }
 
     if (tags) {
@@ -381,7 +381,7 @@ const getProductFilters = async (req, res) => {
 
     if (collections) {
       const collectionArray = collections.replaceAll('-', ' ').split(',');
-      query.collections = { $in: collectionArray };
+      query.collections = { $in: createCaseInsensitivePatterns(collectionArray) };
     }
 
     if (style) {
