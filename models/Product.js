@@ -154,4 +154,13 @@ ProductSchema.index({ productId: 1 }, { unique: true });
 ProductSchema.index({ handle: 1 }, { unique: true });
 ProductSchema.index({ shopifyId: 1 }, { unique: true });
 
+ProductSchema.pre('save', function (next) {
+  if (this.collections && Array.isArray(this.collections)) {
+    this.collections = this.collections.map(c =>
+      slugify(c, { lower: true, strict: true })
+    );
+  }
+  next();
+});
+
 export default mongoose.model("Product", ProductSchema, "products");
