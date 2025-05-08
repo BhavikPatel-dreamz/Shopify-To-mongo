@@ -91,7 +91,7 @@ async function migrateCollectionProducts(collectionHandle = '') {
 
 // Usage examples:
 // Migrate specific collection
-//migrateCollectionProducts('women-clothing');
+migrateCollectionProducts('all-mens');
 
 // Migrate all collections
 // migrateCollectionProducts();

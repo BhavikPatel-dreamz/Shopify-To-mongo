@@ -11,10 +11,40 @@ const filterCache = {
   timestamps: {}
 };
 
+// Create a more efficient cache with size limits
 const filterCacheObject = {
-  data: {},
-  timeout: 60 * 60 * 1000, // 100 minutes cache timeout
-  timestamps: {}
+  data: new Map(),
+  timeout: 60 * 60 * 1000, // 1 hour cache timeout
+  maxSize: 1000, // Maximum number of cached items
+  timestamps: new Map(),
+  
+  set: function(key, value) {
+    // Remove oldest items if cache is full
+    if (this.data.size >= this.maxSize) {
+      const oldestKey = Array.from(this.timestamps.entries())
+        .sort((a, b) => a[1] - b[1])[0][0];
+      this.data.delete(oldestKey);
+      this.timestamps.delete(oldestKey);
+    }
+    
+    this.data.set(key, value);
+    this.timestamps.set(key, Date.now());
+  },
+  
+  get: function(key) {
+    return this.data.get(key);
+  },
+  
+  isValid: function(key) {
+    const timestamp = this.timestamps.get(key);
+    if (!timestamp) return false;
+    return (Date.now() - timestamp) < this.timeout;
+  },
+  
+  clear: function() {
+    this.data.clear();
+    this.timestamps.clear();
+  }
 };
 
 
@@ -34,9 +64,9 @@ const isCacheValid = (key) => {
 };
 
 const isCacheValidObject = (key) => {
-  if (!filterCacheObject.data[key]) return false;
+  if (!filterCacheObject.data.get(key)) return false;
   
-  const timestamp = filterCacheObject.timestamps[key] || 0;
+  const timestamp = filterCacheObject.timestamps.get(key);
   const now = Date.now();
   return (now - timestamp) < filterCacheObject.timeout;
 };
@@ -49,6 +79,40 @@ const createCaseInsensitivePatterns = (values) => {
   }
   const valueArray = Array.isArray(values) ? values : [values];
   return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
+};
+
+// Helper function to optimize query building
+const buildFilterQuery = (filters) => {
+  const query = { isAvailable: true };
+  
+  const filterMappings = {
+    tags: 'tags',
+    category: 'categories',
+    color: 'attributes.color',
+    size: 'attributes.size',
+    material: 'attributes.material',
+    season: 'attributes.season',
+    gender: 'attributes.gender',
+    productGroup: 'productGroup',
+    productType: 'productType',
+    brand: 'brand',
+    fabric: 'attributes.fabric',
+    work: 'attributes.work',
+    style: 'attributes.style'
+  };
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value && filterMappings[key]) {
+      if (key === 'collections') {
+        const collectionArray = value.replaceAll('-', ' ').split(',');
+        query[filterMappings[key]] = { $in: createCaseInsensitivePatterns(collectionArray) };
+      } else {
+        query[filterMappings[key]] = { $in: createCaseInsensitivePatterns(value) };
+      }
+    }
+  });
+
+  return query;
 };
 
 /**
@@ -311,104 +375,85 @@ const getProducts = async (req, res) => {
  * @param {Object} res - Express response object
  */
 const getProductFilters = async (req, res) => {
+  const startTime = Date.now();
   try {
     const cacheKey = generateCacheKey(req.query);
     
-    // Check if we have a valid cached response
-    if (isCacheValidObject(cacheKey)) {
-      console.log('Returning cached Product Filter results');
-      return res.json(filterCacheObject.data[cacheKey]);
+    // Check cache
+    if (filterCacheObject.isValid(cacheKey)) {
+      console.log('Cache hit - Response time:', Date.now() - startTime, 'ms');
+      return res.json(filterCacheObject.get(cacheKey));
     }
 
-    // Extract current filters from the request query
-    const { collections, tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work, style } = req.query;
-
-    // Build the query - Always include isAvailable: true
-    const query = {
-      isAvailable: true
-    };
-
-    // Add other filters
-    if (tags) {
-      query.tags = { $in: createCaseInsensitivePatterns(tags) };
-    }
-
-    if (category) {
-      query.categories = { $in: createCaseInsensitivePatterns(category) };
-    }
-
-    if (color) {
-      query['attributes.color'] = { $in: createCaseInsensitivePatterns(color) };
-    }
-
-    if (size) {
-      query['attributes.size'] = { $in: createCaseInsensitivePatterns(size) };
-    }
-
-    if (material) {
-      query['attributes.material'] = { $in: createCaseInsensitivePatterns(material) };
-    }
-
-    if (season) {
-      query['attributes.season'] = { $in: createCaseInsensitivePatterns(season) };
-    }
-
-    if (gender) {
-      query['attributes.gender'] = { $in: createCaseInsensitivePatterns(gender) };
-    }
-
-    if (productGroup) {
-      query.productGroup = { $in: createCaseInsensitivePatterns(productGroup) };
-    }
-
-    if (productType) {
-      query.productType = { $in: createCaseInsensitivePatterns(productType) };
-    }
-
-    if (brand) {
-      query.brand = { $in: createCaseInsensitivePatterns(brand) };
-    }
-
-    if (fabric) {
-      query['attributes.fabric'] = { $in: createCaseInsensitivePatterns(fabric) };
-    }
-
-    if (work) {
-      query['attributes.work'] = { $in: createCaseInsensitivePatterns(work) };
-    }
-
-    if (collections) {
-      const collectionArray = collections.replaceAll('-', ' ').split(',');
-      query.collections = { $in: createCaseInsensitivePatterns(collectionArray) };
-    }
-
-    if (style) {
-      query['attributes.style'] = { $in: createCaseInsensitivePatterns(style) };
-    }
-
-    // Track this query pattern for dynamic indexing
+    console.log('Cache miss - Building new response');
+    
+    // Build optimized query
+    const query = buildFilterQuery(req.query);
+    
+    // Track query pattern
     queryPatternTracker.trackQuery(query);
 
-    // Get total count of available products
+    // Get total count of available products (cached separately)
+    const countStart = Date.now();
     const totalAvailableProducts = await Product.countDocuments({ isAvailable: true });
+    console.log('Count query time:', Date.now() - countStart, 'ms');
 
-    // Combined aggregation pipeline for all filters
+    // Optimized aggregation pipeline
+    const aggStart = Date.now();
     const filterResults = await Product.aggregate([
-      { $match: query },
+      { 
+        $match: query 
+      },
       {
         $facet: {
-          categories: [{ $unwind: '$categories' }, { $group: { _id: '$categories' } }],
-          colors: [{ $unwind: '$attributes.color' }, { $group: { _id: '$attributes.color' } }],
-          sizes: [{ $unwind: '$attributes.size' }, { $group: { _id: '$attributes.size' } }],
-          materials: [{ $unwind: '$attributes.material' }, { $group: { _id: '$attributes.material' } }],
-          seasons: [{ $unwind: '$attributes.season' }, { $group: { _id: '$attributes.season' } }],
-          genders: [{ $unwind: '$attributes.gender' }, { $group: { _id: '$attributes.gender' } }],
-          productGroups: [{ $group: { _id: '$productGroup' } }],
-          productTypes: [{ $group: { _id: '$productType' } }],
-          brands: [{ $group: { _id: '$brand' } }],
-          fabrics: [{ $unwind: '$attributes.fabric' }, { $group: { _id: '$attributes.fabric' } }],
-          works: [{ $unwind: '$attributes.work' }, { $group: { _id: '$attributes.work' } }],
-          collections: [{ $unwind: '$collections' }, { $group: { _id: '$collections' } }],
+          categories: [
+            { $unwind: { path: '$categories', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$categories' } }
+          ],
+          colors: [
+            { $unwind: { path: '$attributes.color', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.color' } }
+          ],
+          sizes: [
+            { $unwind: { path: '$attributes.size', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.size' } }
+          ],
+          materials: [
+            { $unwind: { path: '$attributes.material', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.material' } }
+          ],
+          seasons: [
+            { $unwind: { path: '$attributes.season', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.season' } }
+          ],
+          genders: [
+            { $unwind: { path: '$attributes.gender', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.gender' } }
+          ],
+          productGroups: [
+            { $match: { productGroup: { $ne: null } } },
+            { $group: { _id: '$productGroup' } }
+          ],
+          productTypes: [
+            { $match: { productType: { $ne: null } } },
+            { $group: { _id: '$productType' } }
+          ],
+          brands: [
+            { $match: { brand: { $ne: null } } },
+            { $group: { _id: '$brand' } }
+          ],
+          fabrics: [
+            { $unwind: { path: '$attributes.fabric', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.fabric' } }
+          ],
+          works: [
+            { $unwind: { path: '$attributes.work', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.work' } }
+          ],
+          collections: [
+            { $unwind: { path: '$collections', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$collections' } }
+          ],
           priceRange: [
             {
               $group: {
@@ -420,7 +465,11 @@ const getProductFilters = async (req, res) => {
           ]
         }
       }
-    ]).option({ maxTimeMS: 30000 }); // Add timeout of 30 seconds
+    ]).option({ 
+      maxTimeMS: 30000,
+      hint: 'filter_aggregation_index'
+    });
+    console.log('Aggregation time:', Date.now() - aggStart, 'ms');
 
     const result = filterResults[0];
     const priceRange = result.priceRange[0] || { minPrice: 0, maxPrice: 1000 };
@@ -431,7 +480,7 @@ const getProductFilters = async (req, res) => {
         totalAvailableProducts,
         categories: result.categories.map(c => c._id).filter(Boolean),
         collections: result.collections.map(c => c._id).filter(Boolean),
-        tags: tags ? tags.split(',') : [],
+        tags: req.query.tags ? req.query.tags.split(',') : [],
         attributes: {
           colors: result.colors.map(c => c._id).filter(Boolean),
           sizes: result.sizes.map(s => s._id).filter(Boolean),
@@ -451,13 +500,14 @@ const getProductFilters = async (req, res) => {
       }
     };
 
-    // Store in cache
-    filterCacheObject.data[cacheKey] = response;
-    filterCacheObject.timestamps[cacheKey] = Date.now();
+    // Store in optimized cache
+    filterCacheObject.set(cacheKey, response);
 
+    console.log('Total response time:', Date.now() - startTime, 'ms');
     res.json(response);
   } catch (error) {
     console.error('Error fetching product filters:', error);
+    console.error('Error occurred after:', Date.now() - startTime, 'ms');
     res.status(500).json({
       success: false,
       error: 'Failed to fetch product filters',
