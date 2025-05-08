@@ -310,9 +310,6 @@ const getProducts = async (req, res) => {
  * @param {Object} res - Express response object
  */
 const getProductFilters = async (req, res) => {
-
-
-  
   try {
     const cacheKey = generateCacheKey(req.query);
     
@@ -323,11 +320,11 @@ const getProductFilters = async (req, res) => {
     }
 
     // Extract current filters from the request query
-    const { collections,tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work, style   } = req.query;
+    const { collections, tags, category, color, size, material, season, gender, productGroup, productType, brand, fabric, work, style } = req.query;
 
     // Build the query - Always include isAvailable: true
     const query = {
-      isAvailable: true  // This ensures we only get filters from available products
+      isAvailable: true
     };
 
     // Add other filters
@@ -391,68 +388,70 @@ const getProductFilters = async (req, res) => {
     // Get total count of available products
     const totalAvailableProducts = await Product.countDocuments({ isAvailable: true });
 
-    // Fetch distinct values for each filter based on available products only
-    const categories = await Product.distinct('categories', query);
-    const colors = await Product.distinct('attributes.color', query);
-    const sizes = await Product.distinct('attributes.size', query);
-    const materials = await Product.distinct('attributes.material', query);
-    const seasons = await Product.distinct('attributes.season', query);
-    const genders = await Product.distinct('attributes.gender', query);
-    const productGroups = await Product.distinct('productGroup', query);
-    const productTypes = await Product.distinct('productType', query);
-    const brands = await Product.distinct('brand', query);
-    const fabrics = await Product.distinct('attributes.fabric', query);
-    const works = await Product.distinct('attributes.work', query);
-    const availableCollections = await Product.distinct('collections', query);
-
-    // Calculate price range based on available products only
-    const priceData = await Product.aggregate([
+    // Combined aggregation pipeline for all filters
+    const filterResults = await Product.aggregate([
       { $match: query },
       {
-        $group: {
-          _id: null,
-          minPrice: { $min: '$price' },
-          maxPrice: { $max: '$price' }
+        $facet: {
+          categories: [{ $unwind: '$categories' }, { $group: { _id: '$categories' } }],
+          colors: [{ $unwind: '$attributes.color' }, { $group: { _id: '$attributes.color' } }],
+          sizes: [{ $unwind: '$attributes.size' }, { $group: { _id: '$attributes.size' } }],
+          materials: [{ $unwind: '$attributes.material' }, { $group: { _id: '$attributes.material' } }],
+          seasons: [{ $unwind: '$attributes.season' }, { $group: { _id: '$attributes.season' } }],
+          genders: [{ $unwind: '$attributes.gender' }, { $group: { _id: '$attributes.gender' } }],
+          productGroups: [{ $group: { _id: '$productGroup' } }],
+          productTypes: [{ $group: { _id: '$productType' } }],
+          brands: [{ $group: { _id: '$brand' } }],
+          fabrics: [{ $unwind: '$attributes.fabric' }, { $group: { _id: '$attributes.fabric' } }],
+          works: [{ $unwind: '$attributes.work' }, { $group: { _id: '$attributes.work' } }],
+          collections: [{ $unwind: '$collections' }, { $group: { _id: '$collections' } }],
+          priceRange: [
+            {
+              $group: {
+                _id: null,
+                minPrice: { $min: '$price' },
+                maxPrice: { $max: '$price' }
+              }
+            }
+          ]
         }
       }
-    ]);
+    ]).option({ maxTimeMS: 30000 }); // Add timeout of 30 seconds
 
-    const priceRange = priceData.length > 0 
-      ? { min: priceData[0].minPrice, max: priceData[0].maxPrice }
-      : { min: 0, max: 1000 };
-
-
-      
-
+    const result = filterResults[0];
+    const priceRange = result.priceRange[0] || { minPrice: 0, maxPrice: 1000 };
 
     const response = {
       success: true,
       data: {
         totalAvailableProducts,
-        categories: categories.filter(Boolean),
-        collections: availableCollections.filter(Boolean),
+        categories: result.categories.map(c => c._id).filter(Boolean),
+        collections: result.collections.map(c => c._id).filter(Boolean),
         tags: tags ? tags.split(',') : [],
         attributes: {
-          colors: colors.filter(Boolean),
-          sizes: sizes.filter(Boolean),
-          materials: materials.filter(Boolean),
-          seasons: seasons.filter(Boolean),
-          genders: genders.filter(Boolean),
-          fabrics: fabrics.filter(Boolean),
-          works: works.filter(Boolean)
+          colors: result.colors.map(c => c._id).filter(Boolean),
+          sizes: result.sizes.map(s => s._id).filter(Boolean),
+          materials: result.materials.map(m => m._id).filter(Boolean),
+          seasons: result.seasons.map(s => s._id).filter(Boolean),
+          genders: result.genders.map(g => g._id).filter(Boolean),
+          fabrics: result.fabrics.map(f => f._id).filter(Boolean),
+          works: result.works.map(w => w._id).filter(Boolean)
         },
-        productGroups: productGroups.filter(Boolean),
-        productTypes: productTypes.filter(Boolean),
-        brands: brands.filter(Boolean),
-        priceRange
-      } 
-    }
+        productGroups: result.productGroups.map(pg => pg._id).filter(Boolean),
+        productTypes: result.productTypes.map(pt => pt._id).filter(Boolean),
+        brands: result.brands.map(b => b._id).filter(Boolean),
+        priceRange: {
+          min: priceRange.minPrice,
+          max: priceRange.maxPrice
+        }
+      }
+    };
 
-      
+    // Store in cache
     filterCacheObject.data[cacheKey] = response;
-      filterCacheObject.timestamps[cacheKey] = Date.now();
+    filterCacheObject.timestamps[cacheKey] = Date.now();
 
-
+    res.json(response);
   } catch (error) {
     console.error('Error fetching product filters:', error);
     res.status(500).json({
