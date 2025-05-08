@@ -202,6 +202,43 @@ ProductSchema.index({
   'attributes.work': 1
 }, { name: 'unwind_operations_index' });
 
+// Add optimized indexes for filter operations
+ProductSchema.index({ 
+  isAvailable: 1,
+  categories: 1,
+  collections: 1,
+  tags: 1
+}, { name: 'category_collection_index' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  'attributes.color': 1,
+  'attributes.size': 1,
+  'attributes.material': 1,
+  'attributes.season': 1,
+  'attributes.gender': 1
+}, { name: 'attributes_index' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  productGroup: 1,
+  productType: 1,
+  brand: 1
+}, { name: 'product_metadata_index' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  'attributes.fabric': 1,
+  'attributes.work': 1,
+  'attributes.style': 1
+}, { name: 'product_details_index' });
+
+// Add index for price range queries
+ProductSchema.index({ 
+  isAvailable: 1,
+  price: 1
+}, { name: 'price_index' });
+
 ProductSchema.pre('save', function (next) {
   if (this.collections && Array.isArray(this.collections)) {
     this.collections = this.collections.map(c =>

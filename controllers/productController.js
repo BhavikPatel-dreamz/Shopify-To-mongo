@@ -2,86 +2,112 @@ import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
 import { queryPatternTracker } from '../models/Product.js';
 
+// Advanced caching system with memory management
+class AdvancedCache {
+  constructor(options = {}) {
+    this.data = new Map();
+    this.timestamps = new Map();
+    this.accessCount = new Map();
+    this.maxSize = options.maxSize || 1000;
+    this.timeout = options.timeout || 60 * 60 * 1000; // 1 hour default
+    this.cleanupInterval = options.cleanupInterval || 5 * 60 * 1000; // 5 minutes
+    this.startCleanupInterval();
+  }
 
+  startCleanupInterval() {
+    setInterval(() => this.cleanup(), this.cleanupInterval);
+  }
 
-// Create a simple in-memory cache
-const filterCache = {
-  data: {},
-  timeout: 60 * 60 * 1000, // 100 minutes cache timeout
-  timestamps: {}
-};
-
-// Create a more efficient cache with size limits
-const filterCacheObject = {
-  data: new Map(),
-  timeout: 60 * 60 * 1000, // 1 hour cache timeout
-  maxSize: 1000, // Maximum number of cached items
-  timestamps: new Map(),
-  
-  set: function(key, value) {
-    // Remove oldest items if cache is full
-    if (this.data.size >= this.maxSize) {
-      const oldestKey = Array.from(this.timestamps.entries())
-        .sort((a, b) => a[1] - b[1])[0][0];
-      this.data.delete(oldestKey);
-      this.timestamps.delete(oldestKey);
+  cleanup() {
+    const now = Date.now();
+    for (const [key, timestamp] of this.timestamps) {
+      if (now - timestamp > this.timeout) {
+        this.delete(key);
+      }
     }
-    
+
+    // If still over maxSize, remove least accessed items
+    if (this.data.size > this.maxSize) {
+      const sortedKeys = Array.from(this.accessCount.entries())
+        .sort((a, b) => a[1] - b[1])
+        .map(([key]) => key);
+      
+      const keysToRemove = sortedKeys.slice(0, this.data.size - this.maxSize);
+      keysToRemove.forEach(key => this.delete(key));
+    }
+  }
+
+  delete(key) {
+    this.data.delete(key);
+    this.timestamps.delete(key);
+    this.accessCount.delete(key);
+  }
+
+  set(key, value) {
+    if (this.data.size >= this.maxSize) {
+      this.cleanup();
+    }
     this.data.set(key, value);
     this.timestamps.set(key, Date.now());
-  },
-  
-  get: function(key) {
-    return this.data.get(key);
-  },
-  
-  isValid: function(key) {
+    this.accessCount.set(key, (this.accessCount.get(key) || 0) + 1);
+  }
+
+  get(key) {
+    const value = this.data.get(key);
+    if (value) {
+      this.accessCount.set(key, (this.accessCount.get(key) || 0) + 1);
+    }
+    return value;
+  }
+
+  isValid(key) {
     const timestamp = this.timestamps.get(key);
     if (!timestamp) return false;
     return (Date.now() - timestamp) < this.timeout;
-  },
-  
-  clear: function() {
+  }
+
+  clear() {
     this.data.clear();
     this.timestamps.clear();
+    this.accessCount.clear();
   }
-};
+}
 
+// Create cache instances
+const filterCache = new AdvancedCache({
+  maxSize: 2000,
+  timeout: 30 * 60 * 1000, // 30 minutes
+  cleanupInterval: 5 * 60 * 1000 // 5 minutes
+});
 
+// Cache for total count
+const countCache = new AdvancedCache({
+  maxSize: 100,
+  timeout: 5 * 60 * 1000, // 5 minutes
+  cleanupInterval: 60 * 1000 // 1 minute
+});
 
-// Helper function to generate cache key from query parameters
+// Helper function to generate cache key
 const generateCacheKey = (queryParams) => {
-  return JSON.stringify(queryParams || {});
+  const sortedParams = Object.keys(queryParams || {})
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = queryParams[key];
+      return acc;
+    }, {});
+  return JSON.stringify(sortedParams);
 };
 
-// Helper function to check if cache is valid
-const isCacheValid = (key) => {
-  if (!filterCache.data[key]) return false;
-  
-  const timestamp = filterCache.timestamps[key] || 0;
-  const now = Date.now();
-  return (now - timestamp) < filterCache.timeout;
-};
-
-const isCacheValidObject = (key) => {
-  if (!filterCacheObject.data.get(key)) return false;
-  
-  const timestamp = filterCacheObject.timestamps.get(key);
-  const now = Date.now();
-  return (now - timestamp) < filterCacheObject.timeout;
-};
-
-// Update the helper function to handle comma-separated values
+// Helper function to create case-insensitive patterns
 const createCaseInsensitivePatterns = (values) => {
   if (typeof values === 'string') {
-    // Split comma-separated values
     values = values.split(',').map(v => v.trim());
   }
   const valueArray = Array.isArray(values) ? values : [values];
   return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
 };
 
-// Helper function to optimize query building
+// Helper function to build optimized query
 const buildFilterQuery = (filters) => {
   const query = { isAvailable: true };
   
@@ -125,9 +151,9 @@ const getProducts = async (req, res) => {
     const cacheKey = generateCacheKey(req.query);
     
     // Check if we have a valid cached response
-    if (isCacheValid(cacheKey)) {
+    if (filterCache.isValid(cacheKey)) {
       console.log('Returning cached filter results');
-      return res.json(filterCache.data[cacheKey]);
+      return res.json(filterCache.get(cacheKey));
     }
 
     // Extract query parameters
@@ -354,9 +380,8 @@ const getProducts = async (req, res) => {
     };
 
     // Store in cache
-    filterCache.data[cacheKey] = response;
-    filterCache.timestamps[cacheKey] = Date.now();
-     
+    filterCache.set(cacheKey, response);
+
     // Return response
     res.json(response);
   } catch (error) {
@@ -380,9 +405,9 @@ const getProductFilters = async (req, res) => {
     const cacheKey = generateCacheKey(req.query);
     
     // Check cache
-    if (filterCacheObject.isValid(cacheKey)) {
+    if (filterCache.isValid(cacheKey)) {
       console.log('Cache hit - Response time:', Date.now() - startTime, 'ms');
-      return res.json(filterCacheObject.get(cacheKey));
+      return res.json(filterCache.get(cacheKey));
     }
 
     console.log('Cache miss - Building new response');
@@ -393,12 +418,20 @@ const getProductFilters = async (req, res) => {
     // Track query pattern
     queryPatternTracker.trackQuery(query);
 
-    // Get total count of available products (cached separately)
-    const countStart = Date.now();
-    const totalAvailableProducts = await Product.countDocuments({ isAvailable: true });
-    console.log('Count query time:', Date.now() - countStart, 'ms');
+    // Get total count with caching
+    const countKey = 'total_count';
+    let totalAvailableProducts;
+    
+    if (countCache.isValid(countKey)) {
+      totalAvailableProducts = countCache.get(countKey);
+    } else {
+      const countStart = Date.now();
+      totalAvailableProducts = await Product.countDocuments({ isAvailable: true });
+      countCache.set(countKey, totalAvailableProducts);
+      console.log('Count query time:', Date.now() - countStart, 'ms');
+    }
 
-    // Optimized aggregation pipeline
+    // Optimized aggregation pipeline with better performance
     const aggStart = Date.now();
     const filterResults = await Product.aggregate([
       { 
@@ -406,54 +439,83 @@ const getProductFilters = async (req, res) => {
       },
       {
         $facet: {
+          // Category and Collection filters
           categories: [
             { $unwind: { path: '$categories', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$categories' } }
-          ],
-          colors: [
-            { $unwind: { path: '$attributes.color', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.color' } }
-          ],
-          sizes: [
-            { $unwind: { path: '$attributes.size', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.size' } }
-          ],
-          materials: [
-            { $unwind: { path: '$attributes.material', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.material' } }
-          ],
-          seasons: [
-            { $unwind: { path: '$attributes.season', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.season' } }
-          ],
-          genders: [
-            { $unwind: { path: '$attributes.gender', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.gender' } }
-          ],
-          productGroups: [
-            { $match: { productGroup: { $ne: null } } },
-            { $group: { _id: '$productGroup' } }
-          ],
-          productTypes: [
-            { $match: { productType: { $ne: null } } },
-            { $group: { _id: '$productType' } }
-          ],
-          brands: [
-            { $match: { brand: { $ne: null } } },
-            { $group: { _id: '$brand' } }
-          ],
-          fabrics: [
-            { $unwind: { path: '$attributes.fabric', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.fabric' } }
-          ],
-          works: [
-            { $unwind: { path: '$attributes.work', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.work' } }
+            { $group: { _id: '$categories', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
           ],
           collections: [
             { $unwind: { path: '$collections', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$collections' } }
+            { $group: { _id: '$collections', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
           ],
+          // Attribute filters
+          colors: [
+            { $unwind: { path: '$attributes.color', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.color', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          sizes: [
+            { $unwind: { path: '$attributes.size', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.size', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          materials: [
+            { $unwind: { path: '$attributes.material', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.material', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          seasons: [
+            { $unwind: { path: '$attributes.season', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.season', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          genders: [
+            { $unwind: { path: '$attributes.gender', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.gender', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          // Product metadata filters
+          productGroups: [
+            { $match: { productGroup: { $ne: null } } },
+            { $group: { _id: '$productGroup', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          productTypes: [
+            { $match: { productType: { $ne: null } } },
+            { $group: { _id: '$productType', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          brands: [
+            { $match: { brand: { $ne: null } } },
+            { $group: { _id: '$brand', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          // Additional attribute filters
+          fabrics: [
+            { $unwind: { path: '$attributes.fabric', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.fabric', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          works: [
+            { $unwind: { path: '$attributes.work', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$attributes.work', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $project: { _id: 1 } }
+          ],
+          // Price range
           priceRange: [
             {
               $group: {
@@ -467,41 +529,50 @@ const getProductFilters = async (req, res) => {
       }
     ]).option({ 
       maxTimeMS: 30000,
-      hint: 'filter_aggregation_index'
+      hint: 'filter_aggregation_index',
+      allowDiskUse: true
     });
     console.log('Aggregation time:', Date.now() - aggStart, 'ms');
 
     const result = filterResults[0];
     const priceRange = result.priceRange[0] || { minPrice: 0, maxPrice: 1000 };
 
+    // Process and sort results
+    const processResults = (items) => {
+      return items
+        .map(item => item._id)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    };
+
     const response = {
       success: true,
       data: {
         totalAvailableProducts,
-        categories: result.categories.map(c => c._id).filter(Boolean),
-        collections: result.collections.map(c => c._id).filter(Boolean),
-        tags: req.query.tags ? req.query.tags.split(',') : [],
+        categories: processResults(result.categories),
+        collections: processResults(result.collections),
+        tags: req.query.tags ? req.query.tags.split(',').sort() : [],
         attributes: {
-          colors: result.colors.map(c => c._id).filter(Boolean),
-          sizes: result.sizes.map(s => s._id).filter(Boolean),
-          materials: result.materials.map(m => m._id).filter(Boolean),
-          seasons: result.seasons.map(s => s._id).filter(Boolean),
-          genders: result.genders.map(g => g._id).filter(Boolean),
-          fabrics: result.fabrics.map(f => f._id).filter(Boolean),
-          works: result.works.map(w => w._id).filter(Boolean)
+          colors: processResults(result.colors),
+          sizes: processResults(result.sizes),
+          materials: processResults(result.materials),
+          seasons: processResults(result.seasons),
+          genders: processResults(result.genders),
+          fabrics: processResults(result.fabrics),
+          works: processResults(result.works)
         },
-        productGroups: result.productGroups.map(pg => pg._id).filter(Boolean),
-        productTypes: result.productTypes.map(pt => pt._id).filter(Boolean),
-        brands: result.brands.map(b => b._id).filter(Boolean),
+        productGroups: processResults(result.productGroups),
+        productTypes: processResults(result.productTypes),
+        brands: processResults(result.brands),
         priceRange: {
-          min: priceRange.minPrice,
-          max: priceRange.maxPrice
+          min: Math.floor(priceRange.minPrice),
+          max: Math.ceil(priceRange.maxPrice)
         }
       }
     };
 
     // Store in optimized cache
-    filterCacheObject.set(cacheKey, response);
+    filterCache.set(cacheKey, response);
 
     console.log('Total response time:', Date.now() - startTime, 'ms');
     res.json(response);
