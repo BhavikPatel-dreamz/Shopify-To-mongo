@@ -1,6 +1,6 @@
 import Product from '../models/Product.js';
 import { queryPatternTracker } from '../models/Product.js';
-import AdvancedCache from '../utils/AdvancedCache.js';
+import RedisCache from '../utils/RedisCache.js';
 import { buildSharedQuery } from './productController.js';
 import { generateCacheKey } from '../utils/comman.js';
 
@@ -8,25 +8,21 @@ import { generateCacheKey } from '../utils/comman.js';
  * Cache Configuration
  * 
  * filterCache: Stores computed filter results
- * - Capacity: 2000 entries
  * - TTL: 30 minutes
- * - Cleanup: Every 5 minutes
+ * - Prefix: 'filter:'
  * 
  * countCache: Stores total product counts
- * - Capacity: 100 entries
  * - TTL: 5 minutes
- * - Cleanup: Every minute
+ * - Prefix: 'count:'
  */
-const filterCache = new AdvancedCache({
-  maxSize: 2000,
-  timeout: 30 * 60 * 1000, // 30 minutes
-  cleanupInterval: 5 * 60 * 1000 // 5 minutes
+const filterCache = new RedisCache({
+  timeout: 30 * 60, // 30 minutes
+  prefix: 'filter:'
 });
 
-const countCache = new AdvancedCache({
-  maxSize: 100,
-  timeout: 5 * 60 * 1000, // 5 minutes
-  cleanupInterval: 60 * 1000 // 1 minute
+const countCache = new RedisCache({
+  timeout: 5 * 60, // 5 minutes
+  prefix: 'count:'
 });
 
 /**
@@ -88,9 +84,13 @@ const getProductFilters = async (req, res) => {
   try {
     const cacheKey = generateCacheKey(req.query);
     
-    if (filterCache.isValid(cacheKey)) {
-      console.log('Cache hit - Response time:', Date.now() - startTime, 'ms');
-      return res.json(filterCache.get(cacheKey));
+    // Try hierarchical cache first
+    const baseKey = 'filters';
+    const cachedResult = await filterCache.getHierarchical(baseKey, req.query);
+    
+    if (cachedResult) {
+      console.log('Cache hit (hierarchical) - Response time:', Date.now() - startTime, 'ms');
+      return res.json(cachedResult);
     }
 
     console.log('Cache miss - Building new response');
@@ -219,7 +219,9 @@ const getProductFilters = async (req, res) => {
       }
     };
 
-    filterCache.set(cacheKey, response);
+    // Store in hierarchical cache
+    await filterCache.setHierarchical(baseKey, req.query, response);
+    
     console.log('Total response time:', Date.now() - startTime, 'ms');
     res.json(response);
 

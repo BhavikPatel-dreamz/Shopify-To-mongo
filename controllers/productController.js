@@ -1,8 +1,21 @@
 import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
 import { queryPatternTracker } from '../models/Product.js';
-import AdvancedCache from '../utils/AdvancedCache.js';
+import RedisCache from '../utils/RedisCache.js';
 import { generateCacheKey } from '../utils/comman.js';
+import redisConfig from '../config/redis.js';
+
+/**
+ * Cache Configuration for Products
+ * 
+ * productCache: Stores product query results
+ * - TTL: 1 hour
+ * - Prefix: 'product:'
+ */
+const productCache = new RedisCache({
+  timeout: redisConfig.ttls.product,
+  prefix: redisConfig.prefixes.product
+});
 
 /**
  * Cache Configuration for Products
@@ -13,20 +26,18 @@ import { generateCacheKey } from '../utils/comman.js';
  * - Cleanup: Every 5 minutes
  * Used to cache product listings with their filters
  */
-const filterCache = new AdvancedCache({
+const filterCache = new RedisCache({
   maxSize: 2000,
   timeout: 30 * 60 * 1000, // 30 minutes
   cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
 
 // Cache for total count
-const countCache = new AdvancedCache({
+const countCache = new RedisCache({
   maxSize: 100,
   timeout: 5 * 60 * 1000, // 5 minutes
   cleanupInterval: 60 * 1000 // 1 minute
 });
-
-
 
 /**
  * Creates case-insensitive regex patterns for filtering
@@ -40,7 +51,6 @@ const createCaseInsensitivePatterns = (values) => {
   const valueArray = Array.isArray(values) ? values : [values];
   return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
 };
-
 
 /**
  * Shared query builder for both products and filters
@@ -194,7 +204,7 @@ export const buildSharedQuery = async (queryParams) => {
  * 
  * Features:
  * - Advanced filtering with shared query builder
- * - Smart caching system
+ * - Redis caching with hierarchical support
  * - Flexible sorting options
  * - Pagination support
  * 
@@ -216,24 +226,30 @@ export const buildSharedQuery = async (queryParams) => {
  */
 const getProducts = async (req, res) => {
   try {
-    const cacheKey = generateCacheKey(req.query);
+    // Create cache key from query params
+    const baseKey = 'products';
+    const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', ...filters } = req.query;
     
-    // Check if we have a valid cached response
-    if (filterCache.isValid(cacheKey)) {
-      console.log('Returning cached filter results');
-      return res.json(filterCache.get(cacheKey));
+    // Include pagination and sorting in cache key
+    const cacheFilters = {
+      ...filters,
+      page,
+      limit,
+      sort,
+      order
+    };
+
+    // Try to get from hierarchical cache
+    const cachedResult = await productCache.getHierarchical(baseKey, cacheFilters);
+    if (cachedResult) {
+      console.log('Cache hit (hierarchical) for products');
+      return res.json(cachedResult);
     }
 
-    const query = await buildSharedQuery(req.query);
-    
-    // Extract pagination and sorting params
-    const {
-      page = 1,
-      limit = 20,
-      sort = 'createdAt',
-      order = 'desc'
-    } = req.query;
+    console.log('Cache miss for products - fetching from database');
 
+    const query = await buildSharedQuery(filters);
+    
     // Calculate pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -271,13 +287,14 @@ const getProducts = async (req, res) => {
     }
 
     // Execute query with pagination
-    const products = await Product.find(query)
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
-
-    const total = await Product.countDocuments(query);
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Product.countDocuments(query)
+    ]);
 
     const response = {
       success: true,
@@ -297,7 +314,9 @@ const getProducts = async (req, res) => {
       }
     };
 
-    filterCache.set(cacheKey, response);
+    // Store in hierarchical cache
+    await productCache.setHierarchical(baseKey, cacheFilters, response);
+    
     res.json(response);
 
   } catch (error) {
@@ -309,8 +328,6 @@ const getProducts = async (req, res) => {
     });
   }
 };
-
-
 
 export default {
   getProducts,
