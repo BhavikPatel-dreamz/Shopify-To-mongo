@@ -17,27 +17,7 @@ const productCache = new RedisCache({
   prefix: redisConfig.prefixes.product
 });
 
-/**
- * Cache Configuration for Products
- * 
- * filterCache: Stores product query results
- * - Capacity: 2000 entries
- * - TTL: 30 minutes
- * - Cleanup: Every 5 minutes
- * Used to cache product listings with their filters
- */
-const filterCache = new RedisCache({
-  maxSize: 2000,
-  timeout: 30 * 60 * 1000, // 30 minutes
-  cleanupInterval: 5 * 60 * 1000 // 5 minutes
-});
 
-// Cache for total count
-const countCache = new RedisCache({
-  maxSize: 100,
-  timeout: 5 * 60 * 1000, // 5 minutes
-  cleanupInterval: 60 * 1000 // 1 minute
-});
 
 /**
  * Creates case-insensitive regex patterns for filtering
