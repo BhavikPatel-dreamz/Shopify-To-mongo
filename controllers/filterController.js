@@ -2,7 +2,7 @@ import Product from '../models/Product.js';
 import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
 import { buildSharedQuery } from './productController.js';
-import { generateCacheKey } from '../utils/comman.js';
+
 
 /**
  * Cache Configuration

@@ -1,8 +1,7 @@
 import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
-import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
-import { generateCacheKey } from '../utils/comman.js';
+  
 
 /**
  * Cache Configuration for Products
@@ -14,8 +13,8 @@ import { generateCacheKey } from '../utils/comman.js';
  */
 const productCache = new AdvancedCache({
   maxSize: 2000,
-  timeout: 30 * 60 * 1000, // 30 minutes
-  cleanupInterval: 5 * 60 * 1000 // 5 minutes
+  timeout: 60 * 60 * 1000, // 1 hour
+  cleanupInterval: 10 * 60 * 1000 // 10 minutes
 });
 
 /**

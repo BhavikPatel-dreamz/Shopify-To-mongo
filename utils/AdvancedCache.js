@@ -70,6 +70,44 @@ class AdvancedCache {
     this.accessCount.clear();
   }
 
+  // Helper function to filter products based on filters
+  filterProducts(products, filters) {
+    return products.filter(product => {
+      for (const [key, value] of Object.entries(filters)) {
+        // Handle different types of filters
+        switch(key) {
+          case 'category':
+            if (!product.categories?.some(cat => 
+              cat.toLowerCase() === value.toLowerCase())) return false;
+            break;
+          case 'collections':
+            if (!product.collections?.some(col => 
+              col.toLowerCase() === value.toLowerCase())) return false;
+            break;
+          case 'color':
+            if (!product.attributes?.color?.some(c => 
+              c.toLowerCase() === value.toLowerCase())) return false;
+            break;
+          case 'size':
+            if (!product.attributes?.size?.some(s => 
+              s.toLowerCase() === value.toLowerCase())) return false;
+            break;
+          case 'brand':
+            if (product.brand?.toLowerCase() !== value.toLowerCase()) return false;
+            break;
+          case 'minPrice':
+            if (product.price < parseFloat(value)) return false;
+            break;
+          case 'maxPrice':
+            if (product.price > parseFloat(value)) return false;
+            break;
+          // Add more filter types as needed
+        }
+      }
+      return true;
+    });
+  }
+
   // Hierarchical caching methods
   setHierarchical(baseKey, filters, value) {
     try {
@@ -118,17 +156,61 @@ class AdvancedCache {
       
       // If no exact match, try parent keys
       let currentKey = fullKey;
+      let currentFilters = {...filters};
+      
       while (currentKey.includes(':')) {
         currentKey = currentKey.substring(0, currentKey.lastIndexOf(':'));
+        const lastFilterKey = currentKey.substring(currentKey.lastIndexOf(':') + 1).split('=')[0];
+        delete currentFilters[lastFilterKey];
+        
         if (this.isValid(currentKey)) {
           const parentValue = this.get(currentKey);
-          if (parentValue) return parentValue;
+          if (parentValue) {
+            // Deep clone the parent value to avoid modifying cache
+            const clonedValue = JSON.parse(JSON.stringify(parentValue));
+            
+            // Filter the products based on remaining filters
+            if (clonedValue.data && Array.isArray(clonedValue.data.products)) {
+              clonedValue.data.products = this.filterProducts(clonedValue.data.products, currentFilters);
+              
+              // Update counts and pagination
+              const total = clonedValue.data.products.length;
+              clonedValue.data.pagination = {
+                ...clonedValue.data.pagination,
+                total,
+                pages: Math.ceil(total / clonedValue.data.pagination.limit)
+              };
+              clonedValue.data.totalAvailableProducts = total;
+            }
+            
+            return clonedValue;
+          }
         }
       }
       
       // Finally try the base key
       if (this.isValid(baseKey)) {
-        return this.get(baseKey);
+        const baseValue = this.get(baseKey);
+        if (baseValue) {
+          // Deep clone the base value
+          const clonedValue = JSON.parse(JSON.stringify(baseValue));
+          
+          // Filter the base results
+          if (clonedValue.data && Array.isArray(clonedValue.data.products)) {
+            clonedValue.data.products = this.filterProducts(clonedValue.data.products, filters);
+            
+            // Update counts and pagination
+            const total = clonedValue.data.products.length;
+            clonedValue.data.pagination = {
+              ...clonedValue.data.pagination,
+              total,
+              pages: Math.ceil(total / clonedValue.data.pagination.limit)
+            };
+            clonedValue.data.totalAvailableProducts = total;
+          }
+          
+          return clonedValue;
+        }
       }
       
       return null;
