@@ -1,23 +1,22 @@
 import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
 import { queryPatternTracker } from '../models/Product.js';
-import RedisCache from '../utils/RedisCache.js';
+import AdvancedCache from '../utils/AdvancedCache.js';
 import { generateCacheKey } from '../utils/comman.js';
-import redisConfig from '../config/redis.js';
 
 /**
  * Cache Configuration for Products
  * 
  * productCache: Stores product query results
- * - TTL: 1 hour
- * - Prefix: 'product:'
+ * - Capacity: 2000 entries
+ * - TTL: 30 minutes
+ * - Cleanup: Every 5 minutes
  */
-const productCache = new RedisCache({
-  timeout: redisConfig.ttls.product,
-  prefix: redisConfig.prefixes.product
+const productCache = new AdvancedCache({
+  maxSize: 2000,
+  timeout: 30 * 60 * 1000, // 30 minutes
+  cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
-
-
 
 /**
  * Creates case-insensitive regex patterns for filtering
@@ -184,7 +183,7 @@ export const buildSharedQuery = async (queryParams) => {
  * 
  * Features:
  * - Advanced filtering with shared query builder
- * - Redis caching with hierarchical support
+ * - Smart caching system
  * - Flexible sorting options
  * - Pagination support
  * 
@@ -206,7 +205,6 @@ export const buildSharedQuery = async (queryParams) => {
  */
 const getProducts = async (req, res) => {
   try {
-    // Create cache key from query params
     const baseKey = 'products';
     const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', ...filters } = req.query;
     
@@ -220,7 +218,7 @@ const getProducts = async (req, res) => {
     };
 
     // Try to get from hierarchical cache
-    const cachedResult = await productCache.getHierarchical(baseKey, cacheFilters);
+    const cachedResult = productCache.getHierarchical(baseKey, cacheFilters);
     if (cachedResult) {
       console.log('Cache hit (hierarchical) for products');
       return res.json(cachedResult);
@@ -295,7 +293,7 @@ const getProducts = async (req, res) => {
     };
 
     // Store in hierarchical cache
-    await productCache.setHierarchical(baseKey, cacheFilters, response);
+    productCache.setHierarchical(baseKey, cacheFilters, response);
     
     res.json(response);
 
@@ -310,6 +308,5 @@ const getProducts = async (req, res) => {
 };
 
 export default {
-  getProducts,
-
+  getProducts
 };

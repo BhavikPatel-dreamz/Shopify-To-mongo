@@ -1,6 +1,6 @@
 import Product from '../models/Product.js';
 import { queryPatternTracker } from '../models/Product.js';
-import RedisCache from '../utils/RedisCache.js';
+import AdvancedCache from '../utils/AdvancedCache.js';
 import { buildSharedQuery } from './productController.js';
 import { generateCacheKey } from '../utils/comman.js';
 
@@ -8,21 +8,25 @@ import { generateCacheKey } from '../utils/comman.js';
  * Cache Configuration
  * 
  * filterCache: Stores computed filter results
+ * - Capacity: 2000 entries
  * - TTL: 30 minutes
- * - Prefix: 'filter:'
+ * - Cleanup: Every 5 minutes
  * 
  * countCache: Stores total product counts
+ * - Capacity: 100 entries
  * - TTL: 5 minutes
- * - Prefix: 'count:'
+ * - Cleanup: Every minute
  */
-const filterCache = new RedisCache({
-  timeout: 30 * 60, // 30 minutes
-  prefix: 'filter:'
+const filterCache = new AdvancedCache({
+  maxSize: 2000,
+  timeout: 30 * 60 * 1000, // 30 minutes
+  cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
 
-const countCache = new RedisCache({
-  timeout: 5 * 60, // 5 minutes
-  prefix: 'count:'
+const countCache = new AdvancedCache({
+  maxSize: 100,
+  timeout: 5 * 60 * 1000, // 5 minutes
+  cleanupInterval: 60 * 1000 // 1 minute
 });
 
 /**
@@ -82,11 +86,8 @@ const processResults = (items) => {
 const getProductFilters = async (req, res) => {
   const startTime = Date.now();
   try {
-    const cacheKey = generateCacheKey(req.query);
-    
-    // Try hierarchical cache first
     const baseKey = 'filters';
-    const cachedResult = await filterCache.getHierarchical(baseKey, req.query);
+    const cachedResult = filterCache.getHierarchical(baseKey, req.query);
     
     if (cachedResult) {
       console.log('Cache hit (hierarchical) - Response time:', Date.now() - startTime, 'ms');
@@ -220,8 +221,7 @@ const getProductFilters = async (req, res) => {
     };
 
     // Store in hierarchical cache
-    await filterCache.setHierarchical(baseKey, req.query, response);
-    
+    filterCache.setHierarchical(baseKey, req.query, response);
     console.log('Total response time:', Date.now() - startTime, 'ms');
     res.json(response);
 

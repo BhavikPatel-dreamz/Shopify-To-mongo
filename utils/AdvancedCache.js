@@ -69,6 +69,74 @@ class AdvancedCache {
     this.timestamps.clear();
     this.accessCount.clear();
   }
+
+  // Hierarchical caching methods
+  setHierarchical(baseKey, filters, value) {
+    try {
+      // Sort filters to ensure consistent key generation
+      const sortedFilters = Object.entries(filters)
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+      
+      // Generate hierarchical keys
+      let currentKey = baseKey;
+      const keys = [currentKey];
+      
+      for (const [filterKey, filterValue] of sortedFilters) {
+        currentKey += `:${filterKey}=${filterValue}`;
+        keys.push(currentKey);
+      }
+      
+      // Store value at each level
+      for (const key of keys) {
+        this.set(key, value);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Hierarchical SET Error:', error);
+      return false;
+    }
+  }
+
+  getHierarchical(baseKey, filters) {
+    try {
+      // Sort filters to ensure consistent key generation
+      const sortedFilters = Object.entries(filters)
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+      
+      // Generate the full key
+      let fullKey = baseKey;
+      for (const [filterKey, filterValue] of sortedFilters) {
+        fullKey += `:${filterKey}=${filterValue}`;
+      }
+      
+      // Try to get the exact match first
+      if (this.isValid(fullKey)) {
+        const exactMatch = this.get(fullKey);
+        if (exactMatch) return exactMatch;
+      }
+      
+      // If no exact match, try parent keys
+      let currentKey = fullKey;
+      while (currentKey.includes(':')) {
+        currentKey = currentKey.substring(0, currentKey.lastIndexOf(':'));
+        if (this.isValid(currentKey)) {
+          const parentValue = this.get(currentKey);
+          if (parentValue) return parentValue;
+        }
+      }
+      
+      // Finally try the base key
+      if (this.isValid(baseKey)) {
+        return this.get(baseKey);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Hierarchical GET Error:', error);
+      return null;
+    }
+  }
 }
 
 export default AdvancedCache; 
