@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
+import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
   
 
@@ -8,8 +9,8 @@ import AdvancedCache from '../utils/AdvancedCache.js';
  * 
  * productCache: Stores product query results
  * - Capacity: 2000 entries
- * - TTL: 30 minutes
- * - Cleanup: Every 5 minutes
+ * - TTL: 1 hour
+ * - Cleanup: Every 10 minutes
  */
 const productCache = new AdvancedCache({
   maxSize: 2000,
@@ -177,6 +178,21 @@ export const buildSharedQuery = async (queryParams) => {
   return query;
 };
 
+// Helper function to generate a consistent cache key for products
+const generateProductCacheKey = (filters) => {
+  // Sort the filter keys to ensure consistent ordering
+  const sortedFilters = {};
+  Object.keys(filters).sort().forEach(key => {
+    // Convert arrays to sorted strings
+    if (Array.isArray(filters[key])) {
+      sortedFilters[key] = filters[key].sort().join(',');
+    } else {
+      sortedFilters[key] = filters[key];
+    }
+  });
+  return `products:${JSON.stringify(sortedFilters)}`;
+};
+
 /**
  * Get products with filtering, sorting, and pagination
  * 
@@ -204,22 +220,24 @@ export const buildSharedQuery = async (queryParams) => {
  */
 const getProducts = async (req, res) => {
   try {
-    const baseKey = 'products';
     const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', ...filters } = req.query;
     
     // Include pagination and sorting in cache key
     const cacheFilters = {
       ...filters,
-      page,
-      limit,
+      page: parseInt(page),
+      limit: parseInt(limit),
       sort,
       order
     };
 
-    // Try to get from hierarchical cache
-    const cachedResult = productCache.getHierarchical(baseKey, cacheFilters);
-    if (cachedResult) {
-      console.log('Cache hit (hierarchical) for products');
+    // Generate a specific cache key for products
+    const baseKey = generateProductCacheKey(cacheFilters);
+
+    // Try to get from cache
+    const cachedResult = productCache.get(baseKey);
+    if (cachedResult && productCache.isValid(baseKey)) {
+      console.log('Cache hit for products');
       return res.json(cachedResult);
     }
 
@@ -291,8 +309,8 @@ const getProducts = async (req, res) => {
       }
     };
 
-    // Store in hierarchical cache
-    productCache.setHierarchical(baseKey, cacheFilters, response);
+    // Store in cache
+    productCache.set(baseKey, response);
     
     res.json(response);
 

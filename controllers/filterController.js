@@ -3,7 +3,6 @@ import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
 import { buildSharedQuery } from './productController.js';
 
-
 /**
  * Cache Configuration
  * 
@@ -11,11 +10,6 @@ import { buildSharedQuery } from './productController.js';
  * - Capacity: 2000 entries
  * - TTL: 30 minutes
  * - Cleanup: Every 5 minutes
- * 
- * countCache: Stores total product counts
- * - Capacity: 100 entries
- * - TTL: 5 minutes
- * - Cleanup: Every minute
  */
 const filterCache = new AdvancedCache({
   maxSize: 2000,
@@ -23,11 +17,20 @@ const filterCache = new AdvancedCache({
   cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
 
-const countCache = new AdvancedCache({
-  maxSize: 100,
-  timeout: 5 * 60 * 1000, // 5 minutes
-  cleanupInterval: 60 * 1000 // 1 minute
-});
+// Helper function to generate a consistent cache key for filters
+const generateFilterCacheKey = (filters) => {
+  // Sort the filter keys to ensure consistent ordering
+  const sortedFilters = {};
+  Object.keys(filters).sort().forEach(key => {
+    // Convert arrays to sorted strings
+    if (Array.isArray(filters[key])) {
+      sortedFilters[key] = filters[key].sort().join(',');
+    } else {
+      sortedFilters[key] = filters[key];
+    }
+  });
+  return `filters:${JSON.stringify(sortedFilters)}`;
+};
 
 /**
  * Normalizes a string value for consistent comparison
@@ -86,18 +89,23 @@ const processResults = (items) => {
 const getProductFilters = async (req, res) => {
   const startTime = Date.now();
   try {
-    const baseKey = 'filters';
-    const cachedResult = filterCache.getHierarchical(baseKey, req.query);
+    // Remove pagination and sorting from filter cache key
+    const { page, limit, sort, order, ...filterParams } = req.query;
     
-    if (cachedResult) {
-      console.log('Cache hit (hierarchical) - Response time:', Date.now() - startTime, 'ms');
+    // Generate specific cache key for filters
+    const cacheKey = generateFilterCacheKey(filterParams);
+    
+    // Try to get from cache
+    const cachedResult = filterCache.get(cacheKey);
+    if (cachedResult && filterCache.isValid(cacheKey)) {
+      console.log('Cache hit - Response time:', Date.now() - startTime, 'ms');
       return res.json(cachedResult);
     }
 
     console.log('Cache miss - Building new response');
     
     // Get the current search query
-    const currentQuery = await buildSharedQuery(req.query);
+    const currentQuery = await buildSharedQuery(filterParams);
     queryPatternTracker.trackQuery(currentQuery);
 
     // Get the current search results count
@@ -191,11 +199,11 @@ const getProductFilters = async (req, res) => {
     const response = {
       success: true,
       data: {
-        currentResultCount,  // Number of products in current search
-        appliedFilters: req.query,
+        currentResultCount,
+        appliedFilters: filterParams,  // Use filterParams instead of req.query
         categories: processResults(result.categories),
         collections: processResults(result.collections),
-        tags: req.query.tags ? req.query.tags.split(',').map(tag => ({
+        tags: filterParams.tags ? filterParams.tags.split(',').map(tag => ({
           value: tag.trim(),
           count: currentResultCount
         })) : [],
@@ -214,14 +222,14 @@ const getProductFilters = async (req, res) => {
         priceRange: {
           min: Math.floor(priceRange.minPrice),
           max: Math.ceil(priceRange.maxPrice),
-          appliedMin: req.query.minPrice ? parseFloat(req.query.minPrice) : undefined,
-          appliedMax: req.query.maxPrice ? parseFloat(req.query.maxPrice) : undefined
+          appliedMin: filterParams.minPrice ? parseFloat(filterParams.minPrice) : undefined,
+          appliedMax: filterParams.maxPrice ? parseFloat(filterParams.maxPrice) : undefined
         }
       }
     };
 
-    // Store in hierarchical cache
-    filterCache.setHierarchical(baseKey, req.query, response);
+    // Store in cache
+    filterCache.set(cacheKey, response);
     console.log('Total response time:', Date.now() - startTime, 'ms');
     res.json(response);
 
