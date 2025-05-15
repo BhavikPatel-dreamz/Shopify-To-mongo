@@ -529,7 +529,6 @@ const getProductFilters = async (req, res) => {
       }
     ]).option({ 
       maxTimeMS: 30000,
-      hint: 'filter_aggregation_index',
       allowDiskUse: true
     });
     console.log('Aggregation time:', Date.now() - aggStart, 'ms');
