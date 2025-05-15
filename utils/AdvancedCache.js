@@ -70,10 +70,20 @@ class AdvancedCache {
     this.accessCount.clear();
   }
 
+  // Helper function to apply pagination
+  applyPagination(products, page, limit) {
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    return products.slice(start, end);
+  }
+
   // Helper function to filter products based on filters
   filterProducts(products, filters) {
+    // Remove pagination related filters
+    const { page, limit, sort, order, ...actualFilters } = filters;
+
     return products.filter(product => {
-      for (const [key, value] of Object.entries(filters)) {
+      for (const [key, value] of Object.entries(actualFilters)) {
         // Handle different types of filters
         switch(key) {
           case 'category':
@@ -106,6 +116,44 @@ class AdvancedCache {
       }
       return true;
     });
+  }
+
+  // Helper function to sort products
+  sortProducts(products, sort, order) {
+    if (!sort || !products.length) return products;
+
+    const sortedProducts = [...products];
+    
+    switch (sort) {
+      case 'featured':
+        sortedProducts.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
+        break;
+      case 'best_selling':
+        sortedProducts.sort((a, b) => (b.sales || 0) - (a.sales || 0));
+        break;
+      case 'alphabetical_asc':
+        sortedProducts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        break;
+      case 'alphabetical_desc':
+        sortedProducts.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+        break;
+      case 'price_asc':
+        sortedProducts.sort((a, b) => (a.price || 0) - (b.price || 0));
+        break;
+      case 'price_desc':
+        sortedProducts.sort((a, b) => (b.price || 0) - (a.price || 0));
+        break;
+      case 'date_old_to_new':
+        sortedProducts.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        break;
+      case 'date_new_to_old':
+        sortedProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        break;
+      default:
+        sortedProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    return sortedProducts;
   }
 
   // Hierarchical caching methods
@@ -169,16 +217,27 @@ class AdvancedCache {
             // Deep clone the parent value to avoid modifying cache
             const clonedValue = JSON.parse(JSON.stringify(parentValue));
             
-            // Filter the products based on remaining filters
+            // Filter and sort the products based on remaining filters
             if (clonedValue.data && Array.isArray(clonedValue.data.products)) {
-              clonedValue.data.products = this.filterProducts(clonedValue.data.products, currentFilters);
+              let filteredProducts = this.filterProducts(clonedValue.data.products, filters);
               
-              // Update counts and pagination
-              const total = clonedValue.data.products.length;
+              // Apply sorting
+              filteredProducts = this.sortProducts(filteredProducts, filters.sort, filters.order);
+              
+              // Get total before pagination
+              const total = filteredProducts.length;
+              
+              // Apply pagination
+              const page = parseInt(filters.page) || 1;
+              const limit = parseInt(filters.limit) || 20;
+              clonedValue.data.products = this.applyPagination(filteredProducts, page, limit);
+              
+              // Update pagination info
               clonedValue.data.pagination = {
-                ...clonedValue.data.pagination,
                 total,
-                pages: Math.ceil(total / clonedValue.data.pagination.limit)
+                page,
+                limit,
+                pages: Math.ceil(total / limit)
               };
               clonedValue.data.totalAvailableProducts = total;
             }
@@ -195,16 +254,27 @@ class AdvancedCache {
           // Deep clone the base value
           const clonedValue = JSON.parse(JSON.stringify(baseValue));
           
-          // Filter the base results
+          // Filter, sort and paginate the base results
           if (clonedValue.data && Array.isArray(clonedValue.data.products)) {
-            clonedValue.data.products = this.filterProducts(clonedValue.data.products, filters);
+            let filteredProducts = this.filterProducts(clonedValue.data.products, filters);
             
-            // Update counts and pagination
-            const total = clonedValue.data.products.length;
+            // Apply sorting
+            filteredProducts = this.sortProducts(filteredProducts, filters.sort, filters.order);
+            
+            // Get total before pagination
+            const total = filteredProducts.length;
+            
+            // Apply pagination
+            const page = parseInt(filters.page) || 1;
+            const limit = parseInt(filters.limit) || 20;
+            clonedValue.data.products = this.applyPagination(filteredProducts, page, limit);
+            
+            // Update pagination info
             clonedValue.data.pagination = {
-              ...clonedValue.data.pagination,
               total,
-              pages: Math.ceil(total / clonedValue.data.pagination.limit)
+              page,
+              limit,
+              pages: Math.ceil(total / limit)
             };
             clonedValue.data.totalAvailableProducts = total;
           }
