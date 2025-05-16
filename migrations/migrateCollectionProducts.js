@@ -4,6 +4,8 @@ import { shopifyClient } from '../config/shopify.js';
 import { collectionsQuery } from '../graphql/queries/collections.js';
 import processBatch from './products/processBatch.js';
 import MigrationState from '../models/MigrationState.js';
+import Collection from '../models/Collection.js';
+
 
 // Initialize MongoDB connection
 await connectDB();
@@ -91,7 +93,21 @@ async function migrateCollectionProducts(collectionHandle = '') {
 
 // Usage examples:
 // Migrate specific collection
-migrateCollectionProducts('all-mens');
 
-// Migrate all collections
-// migrateCollectionProducts();
+async function migrateAllCollections() {
+  // Migrate all collections
+
+  console.log("Starting migration");
+  
+  
+  const collections = await Collection.find({}).limit(10);
+   for (const collection of collections) {
+     await migrateCollectionProducts(collection.handle);
+   }
+   console.log("Migration completed");
+   process.exit(0);
+
+}
+
+await migrateAllCollections();
+
