@@ -110,7 +110,19 @@ const getProductFilters = async (req, res) => {
 
     // Get the current search results count
     const currentResultCount = await Product.countDocuments(currentQuery);
-
+    const queryWithoutPrice = { ...currentQuery };
+    delete queryWithoutPrice.price;
+  
+    const priceStats = await Product.aggregate([
+      { $match: queryWithoutPrice },
+      {
+        $group: {
+          _id: null,
+          minPrice: { $min: "$price" },
+          maxPrice: { $max: "$price" }
+        }
+      }
+    ]);
     // Calculate filters based on current search results
     const filterResults = await Product.aggregate([
       // First match the current search criteria
@@ -194,7 +206,7 @@ const getProductFilters = async (req, res) => {
     });
 
     const result = filterResults[0];
-    const priceRange = result.priceRange[0] || { minPrice: 0, maxPrice: 1000 };
+    const priceRange = priceStats[0] || { minPrice: 0, maxPrice: 1000 };
 
     const response = {
       success: true,
