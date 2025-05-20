@@ -115,9 +115,11 @@ export const buildSharedQuery = async (queryParams) => {
     query.categories = { $in: createCaseInsensitivePatterns(category) };
   }
 
-  if (collections && collections !== 'Products' && collections !== 'All') {
-    const collectionArray = collections.replaceAll('-', ' ').split(',');
-    query.collections = { $in: createCaseInsensitivePatterns(collectionArray) };
+  if (collections && collections.toLowerCase() !== 'products' && collections.toLowerCase() !== 'all') {
+    const collectionArray = collections.replaceAll('-', ' ').split(',').map(c => c.trim());
+    query.collections = {
+      $in: createCaseInsensitivePatterns(collectionArray)
+    };
   }
 
   if (tags) {
