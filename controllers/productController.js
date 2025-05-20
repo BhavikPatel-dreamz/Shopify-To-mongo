@@ -115,7 +115,7 @@ export const buildSharedQuery = async (queryParams) => {
     query.categories = { $in: createCaseInsensitivePatterns(category) };
   }
 
-  if (collections) {
+  if (collections && collections !== 'Products' && collections !== 'All') {
     const collectionArray = collections.replaceAll('-', ' ').split(',');
     query.collections = { $in: createCaseInsensitivePatterns(collectionArray) };
   }

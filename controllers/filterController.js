@@ -104,10 +104,6 @@ const getProductFilters = async (req, res) => {
 
     console.log('Cache miss - Building new response');
     
-    // Get the current search query
-    if (filterParams.collections == 'Products'|| 'All') {
-      delete filterParams.collections;
-    }
     const currentQuery = await buildSharedQuery(filterParams);
     queryPatternTracker.trackQuery(currentQuery);
 
