@@ -225,10 +225,6 @@ const getProducts = async (req, res) => {
     const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', ...filters } = req.query;
     
     // Include pagination and sorting in cache key
-  
-    if (filters.collections == 'Products' || 'All') {
-      delete filters.collections;
-    }
     const cacheFilters = {
       ...filters,
       page: parseInt(page),
