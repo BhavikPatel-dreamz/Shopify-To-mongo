@@ -111,7 +111,10 @@ const getProductFilters = async (req, res) => {
     const currentResultCount = await Product.countDocuments(currentQuery);
     const queryWithoutPrice = { ...currentQuery };
     delete queryWithoutPrice.price;
-  
+
+    const baseQueryWithoutBrand = { ...currentQuery };
+    delete baseQueryWithoutBrand.brand;
+
     const priceStats = await Product.aggregate([
       { $match: queryWithoutPrice },
       {
@@ -204,9 +207,35 @@ const getProductFilters = async (req, res) => {
       allowDiskUse: true
     });
 
+    const allBrandsWithCounts = await Product.aggregate([
+      { $match: { ...baseQueryWithoutBrand, isAvailable: true } },
+      // Group by brand and count
+      {
+        $group: {
+          _id: '$brand',
+          count: { $sum: 1 }
+        }
+      },
+      // Sort by count descending
+      { $sort: { count: -1 } },
+      // Filter out null brands
+      { $match: { _id: { $ne: null } } }
+    ]).option({
+      maxTimeMS: 15000,
+      allowDiskUse: true
+    });
+
     const result = filterResults[0];
     const priceRange = priceStats[0] || { minPrice: 0, maxPrice: 1000 };
 
+    const selectedBrands = filterParams.brand ?
+      filterParams.brand.split(',').map(b => b.trim()) : [];
+
+    const brandsWithSelection = allBrandsWithCounts.map(brand => ({
+      value: brand._id,
+      count: brand.count,
+      selected: selectedBrands.includes(brand._id)
+    }));
     const response = {
       success: true,
       data: {
@@ -229,7 +258,7 @@ const getProductFilters = async (req, res) => {
         },
         productGroups: processResults(result.productGroups),
         productTypes: processResults(result.productTypes),
-        brands: processResults(result.brands),
+        brands: brandsWithSelection,
         priceRange: {
           min: Math.floor(priceRange.minPrice),
           max: Math.ceil(priceRange.maxPrice),
