@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleProductUpdate } from '../controllers/webhookController.js';
+import { handleProductUpdate,handalOrderWebhook} from '../controllers/webhookController.js';
 import verifyShopifyWebhook from '../middleware/verifyWebhook.js';
 
 const router = express.Router();
@@ -11,5 +11,8 @@ router.post('/product-update',
   //verifyShopifyWebhook,
   handleProductUpdate
 );
-
+router.post('/order-webhook', 
+  express.raw({type: 'application/json'}),
+  handalOrderWebhook
+);
 export default router; 

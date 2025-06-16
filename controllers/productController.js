@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import OrderProductCount from '../models/OrderProductCount.js';
 import vectorService from '../services/vectorService.js';
 import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
@@ -279,20 +280,15 @@ const getProducts = async (req, res) => {
       case 'date_new_to_old':
         sortOptions = { createdAt: -1 };
         break;
+      case 'best_seller':
+        const orderedProductIds = await getOrdereWiseProducts(query);
+        query.productId = { $in: orderedProductIds };
+        break;
       default:
-        sortOptions = { createdAt: -1 };
+       sortOptions = { createdAt: -1 };
     }
-
-    // Execute query with pagination
-    const [products, total] = await Promise.all([
-      Product.find(query)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Product.countDocuments(query)
-    ]);
-
+    const [products, total] = await Promise.all([Product.find(query).sort(sortOptions).skip(skip).limit(limitNum).lean(), Product.countDocuments(query)])
+  
     const response = {
       success: true,
       data: {
@@ -313,7 +309,6 @@ const getProducts = async (req, res) => {
 
     // Store in cache
     productCache.set(baseKey, response);
-    
     res.json(response);
 
   } catch (error) {
@@ -325,6 +320,44 @@ const getProducts = async (req, res) => {
     });
   }
 };
+
+const getOrdereWiseProducts = async (query) => {
+  try {
+
+    const currentDate = new Date();
+    let startOfPeriod = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    let endOfPeriod = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+
+    const matchStage = {
+      createdAt: {
+        $gte: startOfPeriod,
+        $lte: endOfPeriod
+      }
+    };
+    // Get most ordered products
+    const mostOrderedProducts = await OrderProductCount.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: '$product_id',
+          totalOrders: { $sum: '$quantity' }
+        }
+      },
+      {
+        $sort: { totalOrders: -1 }
+      }
+    ]).then(results => results.map(p => p._id));
+
+    return mostOrderedProducts;
+  } catch (error) {
+    return {
+      success: false,
+      message: error.message,
+      data: []
+    };
+  }
+}
+
 
 export default {
   getProducts
