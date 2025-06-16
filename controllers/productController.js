@@ -223,7 +223,7 @@ const generateProductCacheKey = (filters) => {
  */
 const getProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', ...filters } = req.query;
+    const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', bypassCache = false, ...filters } = req.query;
     
     // Include pagination and sorting in cache key
     const cacheFilters = {
@@ -237,14 +237,16 @@ const getProducts = async (req, res) => {
     // Generate a specific cache key for products
     const baseKey = generateProductCacheKey(cacheFilters);
 
-    // Try to get from cache
-    const cachedResult = productCache.get(baseKey);
-    if (cachedResult && productCache.isValid(baseKey)) {
-      console.log('Cache hit for products');
-      return res.json(cachedResult);
+    // Try to get from cache only if not bypassing
+    if (!bypassCache) {
+      const cachedResult = productCache.get(baseKey);
+      if (cachedResult && productCache.isValid(baseKey)) {
+        console.log('Cache hit for products');
+        return res.json(cachedResult);
+      }
     }
 
-    console.log('Cache miss for products - fetching from database');
+    console.log('Cache miss or bypassed - fetching from database');
 
     const query = await buildSharedQuery(filters);
     
@@ -313,8 +315,10 @@ const getProducts = async (req, res) => {
           }
         };
 
-        // Store in cache
-        productCache.set(baseKey, response);
+        // Store in cache only if not bypassing
+        if (!bypassCache) {
+          productCache.set(baseKey, response);
+        }
         
         return res.json(response);
       case 'alphabetical_asc':
@@ -367,14 +371,16 @@ const getProducts = async (req, res) => {
       }
     };
 
-    // Store in cache
-    productCache.set(baseKey, response);
+    // Store in cache only if not bypassing
+    if (!bypassCache) {
+      productCache.set(baseKey, response);
+    }
     
     res.json(response);
 
   } catch (error) {
     console.error('Error fetching products:', error);
-    res.status(500).json({
+    res.status(500).json({ 
       success: false,
       error: 'Failed to fetch products',
       message: error.message
