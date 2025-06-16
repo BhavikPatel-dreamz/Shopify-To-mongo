@@ -259,7 +259,7 @@ const getProducts = async (req, res) => {
       case 'featured':
         sortOptions = { featured: -1 };
         break;
-      case 'best_selling':
+      case 'best_seller':
         // Get product sales data for bestseller sorting
         const productSales = await Order.aggregate([
           {
