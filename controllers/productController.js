@@ -287,13 +287,23 @@ const getProducts = async (req, res) => {
           .lean();
 
         // Add sales rank to products
-        const productsWithRank = products.map(product => ({
-          ...product,
-          salesRank: salesRankMap.get(product.shopifyId) || 0
-        }));
+        const productsWithRank = products.map(product => {
+          const productObj = product.toObject();
+          const salesRank = salesRankMap.get(product.productId) || 0;
+          return {
+            ...productObj,
+            salesRank,
+            totalSales: productSales.find(s => s._id === product.productId)?.totalQuantity || 0
+          };
+        });
 
         // Sort products by sales rank
-        productsWithRank.sort((a, b) => a.salesRank - b.salesRank);
+        productsWithRank.sort((a, b) => {
+          if (a.salesRank === 0 && b.salesRank === 0) return 0;
+          if (a.salesRank === 0) return 1;
+          if (b.salesRank === 0) return -1;
+          return a.salesRank - b.salesRank;
+        });
 
         const total = await Product.countDocuments(query);
 
