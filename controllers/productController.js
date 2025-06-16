@@ -382,7 +382,7 @@ const getProducts = async (req, res) => {
   }
 };
 
-const getProductSalesStats = async (req, res) => {
+export const getProductSalesStats = async (req, res) => {
     try {
         const { limit = 20, page = 1 } = req.query;
         const skip = (page - 1) * limit;
@@ -392,13 +392,11 @@ const getProductSalesStats = async (req, res) => {
             {
                 $group: {
                     _id: '$product_id',
-                    totalQuantity: { $sum: '$quantity' },
-                    orderCount: { $sum: 1 },
-                    shopifyId: { $first: '$shopifyId' }
+                    totalSale: { $sum: '$quantity' }
                 }
             },
             {
-                $sort: { totalQuantity: -1 }
+                $sort: { totalSale: -1 }
             },
             {
                 $skip: skip
@@ -407,27 +405,10 @@ const getProductSalesStats = async (req, res) => {
                 $limit: parseInt(limit)
             },
             {
-                $lookup: {
-                    from: 'products',
-                    localField: '_id',
-                    foreignField: 'shopifyId',
-                    as: 'productDetails'
-                }
-            },
-            {
-                $unwind: '$productDetails'
-            },
-            {
                 $project: {
-                    _id: 1,
-                    shopifyId: 1,
-                    totalQuantity: 1,
-                    orderCount: 1,
-                    product: {
-                        title: '$productDetails.title',
-                        price: '$productDetails.price',
-                        image: '$productDetails.image'
-                    }
+                    _id: 0,
+                    productId: '$_id',
+                    totalSale: 1
                 }
             }
         ]);

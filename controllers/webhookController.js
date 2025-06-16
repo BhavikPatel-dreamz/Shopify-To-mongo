@@ -67,7 +67,6 @@ export const handleOrderUpdate = async (req, res) => {
                 const order = new Order({
                     product_id: item.product_id.toString(),
                     order_id: orderData.id,
-                    shopifyId: orderData.id.toString(),
                     orderNumber: orderData.order_number,
                     quantity: item.quantity
                 });
