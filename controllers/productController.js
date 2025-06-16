@@ -382,7 +382,94 @@ const getProducts = async (req, res) => {
   }
 };
 
+export const getProductSalesStats = async (req, res) => {
+    try {
+        const { limit = 20, page = 1 } = req.query;
+        const skip = (page - 1) * limit;
+
+        // Aggregate orders to get sales statistics
+        const salesStats = await Order.aggregate([
+            {
+                $group: {
+                    _id: '$product_id',
+                    totalQuantity: { $sum: '$quantity' },
+                    orderCount: { $sum: 1 },
+                    shopifyId: { $first: '$shopifyId' }
+                }
+            },
+            {
+                $sort: { totalQuantity: -1 }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: parseInt(limit)
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: '_id',
+                    foreignField: 'shopifyId',
+                    as: 'productDetails'
+                }
+            },
+            {
+                $unwind: '$productDetails'
+            },
+            {
+                $project: {
+                    _id: 1,
+                    shopifyId: 1,
+                    totalQuantity: 1,
+                    orderCount: 1,
+                    product: {
+                        title: '$productDetails.title',
+                        price: '$productDetails.price',
+                        image: '$productDetails.image'
+                    }
+                }
+            }
+        ]);
+
+        // Get total count for pagination
+        const totalProducts = await Order.aggregate([
+            {
+                $group: {
+                    _id: '$product_id'
+                }
+            },
+            {
+                $count: 'total'
+            }
+        ]);
+
+        const total = totalProducts[0]?.total || 0;
+
+        res.json({
+            success: true,
+            data: {
+                salesStats,
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching product sales stats:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch product sales statistics',
+            message: error.message
+        });
+    }
+};
 
 export default {
-  getProducts
+  getProducts,
+  getProductSalesStats
 };

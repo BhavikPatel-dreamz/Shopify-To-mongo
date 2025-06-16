@@ -4,6 +4,7 @@ import userInteractionController from '../controllers/userInteractionController.
 import embeddingController from '../controllers/embeddingController.js';
 import productController from '../controllers/productController.js';
 import filterController from '../controllers/filterController.js';
+import { getProducts, getProductSalesStats } from '../controllers/productController.js';
 
 const router = express.Router();
 
@@ -46,7 +47,10 @@ router.post('/embeddingSync', embeddingController.syncEmbeddings);
  * - Available attribute values for current filter context
  * All responses are cached for performance optimization
  */
-router.get('/products', productController.getProducts);
+router.get('/products', getProducts);
 router.get('/products/filters', filterController.getProductFilters);
+
+// Get product sales statistics
+router.get('/products/sales-stats', getProductSalesStats);
 
 export default router; 
