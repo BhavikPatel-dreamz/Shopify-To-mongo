@@ -289,11 +289,10 @@ const getProducts = async (req, res) => {
 
         // Add sales rank to products
         const productsWithRank = products.map(product => {
-          const productObj = product.toObject();
           const salesData = productSales.find(s => s._id === product.productId);
           const salesRank = salesRankMap.get(product.productId) || 0;
           return {
-            ...productObj,
+            ...product,
             salesRank,
             totalSales: salesData?.totalQuantity || 0,
             orderCount: salesData?.orderCount || 0
