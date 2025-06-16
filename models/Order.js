@@ -10,10 +10,6 @@ const orderSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-    shopifyId: {
-        type: String,
-        required: true,
-    },
     orderNumber: {
         type: Number,
         required: true,
