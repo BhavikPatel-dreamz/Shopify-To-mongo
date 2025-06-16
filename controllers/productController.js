@@ -267,7 +267,8 @@ const getProducts = async (req, res) => {
           {
             $group: {
               _id: '$product_id',
-              totalQuantity: { $sum: '$quantity' }
+              totalQuantity: { $sum: '$quantity' },
+              orderCount: { $sum: 1 }
             }
           },
           {
@@ -289,11 +290,13 @@ const getProducts = async (req, res) => {
         // Add sales rank to products
         const productsWithRank = products.map(product => {
           const productObj = product.toObject();
+          const salesData = productSales.find(s => s._id === product.productId);
           const salesRank = salesRankMap.get(product.productId) || 0;
           return {
             ...productObj,
             salesRank,
-            totalSales: productSales.find(s => s._id === product.productId)?.totalQuantity || 0
+            totalSales: salesData?.totalQuantity || 0,
+            orderCount: salesData?.orderCount || 0
           };
         });
 
