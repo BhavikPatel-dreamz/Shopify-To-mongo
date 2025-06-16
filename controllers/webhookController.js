@@ -50,15 +50,30 @@ export const handleOrderUpdate = async (req, res) => {
         
         // Process each line item
         for (const item of lineItems) {
-            const order = new Order({
-                product_id: item.product_id.toString(),
+            // Check if order already exists
+            const existingOrder = await Order.findOne({
                 order_id: orderData.id,
-                shopifyId: orderData.shopify_id,
-                orderNumber: orderData.order_number,
-                quantity: item.quantity
+                product_id: item.product_id.toString()
             });
-            
-            await order.save();
+
+            if (existingOrder) {
+                // Update existing order
+                existingOrder.quantity = item.quantity;
+                existingOrder.orderNumber = orderData.order_number;
+                existingOrder.updatedAt = new Date();
+                await existingOrder.save();
+            } else {
+                // Create new order
+                const order = new Order({
+                    product_id: item.product_id.toString(),
+                    order_id: orderData.id,
+                    shopifyId: orderData.id.toString(),
+                    orderNumber: orderData.order_number,
+                    quantity: item.quantity
+                });
+                
+                await order.save();
+            }
         }
 
         res.status(200).json({ message: 'Order data processed successfully' });
