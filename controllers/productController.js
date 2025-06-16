@@ -382,7 +382,7 @@ const getProducts = async (req, res) => {
   }
 };
 
-export const getProductSalesStats = async (req, res) => {
+const getProductSalesStats = async (req, res) => {
     try {
         const { limit = 20, page = 1 } = req.query;
         const skip = (page - 1) * limit;
