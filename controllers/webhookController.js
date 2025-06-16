@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import { transformWebhookProduct } from '../migrations/products/webhookTransform.js';
+import Order from '../models/Order.js';
 
 /**
  * Handle product update webhook from Shopify
@@ -38,4 +39,31 @@ export const handleProductUpdate = async (req, res) => {
     console.error('Webhook Error:', error);
     res.status(500).json({ error: 'Failed to process webhook' });
   }
+};
+
+export const handleOrderUpdate = async (req, res) => {
+    try {
+        const orderData = req.body;
+        
+        // Extract line items from the order
+        const lineItems = orderData.line_items || [];
+        
+        // Process each line item
+        for (const item of lineItems) {
+            const order = new Order({
+                product_id: item.product_id.toString(),
+                order_id: orderData.id,
+                shopifyId: orderData.shopify_id,
+                orderNumber: orderData.order_number,
+                quantity: item.quantity
+            });
+            
+            await order.save();
+        }
+
+        res.status(200).json({ message: 'Order data processed successfully' });
+    } catch (error) {
+        console.error('Error processing order update:', error);
+        res.status(500).json({ error: 'Error processing order update' });
+    }
 }; 

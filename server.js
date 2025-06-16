@@ -4,6 +4,7 @@ import cors from 'cors';
 import connectDB from './config/database.js';
 import routes from './routes/index.js';
 import webhookRoutes from './routes/webhookRoutes.js';
+import { startOrderCleanupJob } from './cron/cleanupOrders.js';
 //import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
 const app = express();
@@ -11,6 +12,9 @@ const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
 connectDB();
+
+// Start the order cleanup cron job
+startOrderCleanupJob();
 
 // Middleware
 app.use(cors());

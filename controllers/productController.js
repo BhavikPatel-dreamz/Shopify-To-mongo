@@ -2,6 +2,7 @@ import Product from '../models/Product.js';
 import vectorService from '../services/vectorService.js';
 import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
+import Order from '../models/Order.js';
   
 
 /**
@@ -259,8 +260,63 @@ const getProducts = async (req, res) => {
         sortOptions = { featured: -1 };
         break;
       case 'best_selling':
-        sortOptions = { sales: -1 };
-        break;
+        // Get product sales data for bestseller sorting
+        const productSales = await Order.aggregate([
+          {
+            $group: {
+              _id: '$product_id',
+              totalQuantity: { $sum: '$quantity' }
+            }
+          },
+          {
+            $sort: { totalQuantity: -1 }
+          }
+        ]);
+
+        // Create a map of product_id to sales rank
+        const salesRankMap = new Map(
+          productSales.map((item, index) => [item._id, index + 1])
+        );
+
+        // Get products with their sales rank
+        const products = await Product.find(query)
+          .skip(skip)
+          .limit(limitNum)
+          .lean();
+
+        // Add sales rank to products
+        const productsWithRank = products.map(product => ({
+          ...product,
+          salesRank: salesRankMap.get(product.shopifyId) || 0
+        }));
+
+        // Sort products by sales rank
+        productsWithRank.sort((a, b) => a.salesRank - b.salesRank);
+
+        const total = await Product.countDocuments(query);
+
+        const response = {
+          success: true,
+          data: {
+            products: productsWithRank.map(product => ({
+              ...product,
+              productUrl: product.productUrl
+            })),
+            pagination: {
+              total,
+              page: pageNum,
+              limit: limitNum,
+              pages: Math.ceil(total / limitNum)
+            },
+            filters: req.query,
+            totalAvailableProducts: total
+          }
+        };
+
+        // Store in cache
+        productCache.set(baseKey, response);
+        
+        return res.json(response);
       case 'alphabetical_asc':
         sortOptions = { name: 1 };
         break;
@@ -326,6 +382,8 @@ const getProducts = async (req, res) => {
   }
 };
 
+
 export default {
-  getProducts
+  getProducts,
+  getBestsellerProducts
 };
