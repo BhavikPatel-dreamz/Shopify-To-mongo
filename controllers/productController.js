@@ -384,6 +384,5 @@ const getProducts = async (req, res) => {
 
 
 export default {
-  getProducts,
-  getBestsellerProducts
+  getProducts
 };
