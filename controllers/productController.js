@@ -10,12 +10,12 @@ import Order from '../models/Order.js';
  * 
  * productCache: Stores product query results
  * - Capacity: 2000 entries
- * - TTL: 1 hour
+ * - TTL: 5 days
  * - Cleanup: Every 10 minutes
  */
 const productCache = new AdvancedCache({
   maxSize: 2000,
-  timeout: 60 * 60 * 1000, // 1 hour
+  timeout: 5 * 24 * 60 * 60 * 1000, // 5 days
   cleanupInterval: 10 * 60 * 1000 // 10 minutes
 });
 
