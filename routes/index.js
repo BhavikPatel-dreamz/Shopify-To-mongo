@@ -49,4 +49,7 @@ router.post('/embeddingSync', embeddingController.syncEmbeddings);
 router.get('/products', productController.getProducts);
 router.get('/products/filters', filterController.getProductFilters);
 
+// Get product sales statistics
+router.get('/products/sales-stats', productController.getProductSalesStats);
+
 export default router; 

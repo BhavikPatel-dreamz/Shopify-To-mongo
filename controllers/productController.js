@@ -3,6 +3,7 @@ import OrderProductCount from '../models/OrderProductCount.js';
 import vectorService from '../services/vectorService.js';
 import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
+import Order from '../models/Order.js';
   
 
 /**
@@ -223,7 +224,7 @@ const generateProductCacheKey = (filters) => {
  */
 const getProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', ...filters } = req.query;
+    const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', bypassCache = false, ...filters } = req.query;
     
     // Include pagination and sorting in cache key
     const cacheFilters = {
@@ -237,14 +238,16 @@ const getProducts = async (req, res) => {
     // Generate a specific cache key for products
     const baseKey = generateProductCacheKey(cacheFilters);
 
-    // Try to get from cache
-    const cachedResult = productCache.get(baseKey);
-    if (cachedResult && productCache.isValid(baseKey)) {
-      console.log('Cache hit for products');
-      return res.json(cachedResult);
+    // Try to get from cache only if not bypassing
+    if (!bypassCache) {
+      const cachedResult = productCache.get(baseKey);
+      if (cachedResult && productCache.isValid(baseKey)) {
+        console.log('Cache hit for products');
+        return res.json(cachedResult);
+      }
     }
 
-    console.log('Cache miss for products - fetching from database');
+    console.log('Cache miss or bypassed - fetching from database');
 
     const query = await buildSharedQuery(filters);
     
@@ -259,9 +262,78 @@ const getProducts = async (req, res) => {
       case 'featured':
         sortOptions = { featured: -1 };
         break;
-      case 'best_selling':
-        sortOptions = { sales: -1 };
-        break;
+      case 'best_seller':
+        // Get product sales data for bestseller sorting
+        const productSales = await Order.aggregate([
+          {
+            $group: {
+              _id: '$product_id',
+              totalQuantity: { $sum: '$quantity' },
+              orderCount: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { totalQuantity: -1 }
+          }
+        ]);
+
+        // Create a map of product_id to sales rank
+        const salesRankMap = new Map(
+          productSales.map((item, index) => [item._id, index + 1])
+        );
+
+        // Get products with their sales rank
+        const products = await Product.find(query)
+          .skip(skip)
+          .limit(limitNum)
+          .lean();
+
+        // Add sales rank to products
+        const productsWithRank = products.map(product => {
+          const salesData = productSales.find(s => s._id === product.productId);
+          const salesRank = salesRankMap.get(product.productId) || 0;
+          return {
+            ...product,
+            salesRank,
+            totalSales: salesData?.totalQuantity || 0,
+            orderCount: salesData?.orderCount || 0
+          };
+        });
+
+        // Sort products by sales rank
+        productsWithRank.sort((a, b) => {
+          if (a.salesRank === 0 && b.salesRank === 0) return 0;
+          if (a.salesRank === 0) return 1;
+          if (b.salesRank === 0) return -1;
+          return a.salesRank - b.salesRank;
+        });
+
+        const total = await Product.countDocuments(query);
+
+        const response = {
+          success: true,
+          data: {
+            products: productsWithRank.map(product => ({
+              ...product,
+              productUrl: product.productUrl
+            })),
+            pagination: {
+              total,
+              page: pageNum,
+              limit: limitNum,
+              pages: Math.ceil(total / limitNum)
+            },
+            filters: req.query,
+            totalAvailableProducts: total
+          }
+        };
+
+        // Store in cache only if not bypassing
+        if (!bypassCache) {
+          productCache.set(baseKey, response);
+        }
+        
+        return res.json(response);
       case 'alphabetical_asc':
         sortOptions = { name: 1 };
         break;
@@ -307,13 +379,16 @@ const getProducts = async (req, res) => {
       }
     };
 
-    // Store in cache
-    productCache.set(baseKey, response);
+    // Store in cache only if not bypassing
+    if (!bypassCache) {
+      productCache.set(baseKey, response);
+    }
+    
     res.json(response);
 
   } catch (error) {
     console.error('Error fetching products:', error);
-    res.status(500).json({
+    res.status(500).json({ 
       success: false,
       error: 'Failed to fetch products',
       message: error.message
@@ -321,44 +396,75 @@ const getProducts = async (req, res) => {
   }
 };
 
-const getOrdereWiseProducts = async (query) => {
-  try {
+export const getProductSalesStats = async (req, res) => {
+    try {
+        const { limit = 20, page = 1 } = req.query;
+        const skip = (page - 1) * limit;
 
-    const currentDate = new Date();
-    let startOfPeriod = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    let endOfPeriod = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+        // Aggregate orders to get sales statistics
+        const salesStats = await Order.aggregate([
+            {
+                $group: {
+                    _id: '$product_id',
+                    totalSale: { $sum: '$quantity' }
+                }
+            },
+            {
+                $sort: { totalSale: -1 }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: parseInt(limit)
+            },
+            {
+                $project: {
+                    _id: 0,
+                    productId: '$_id',
+                    totalSale: 1
+                }
+            }
+        ]);
 
-    const matchStage = {
-      createdAt: {
-        $gte: startOfPeriod,
-        $lte: endOfPeriod
-      }
-    };
-    // Get most ordered products
-    const mostOrderedProducts = await OrderProductCount.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: '$product_id',
-          totalOrders: { $sum: '$quantity' }
-        }
-      },
-      {
-        $sort: { totalOrders: -1 }
-      }
-    ]).then(results => results.map(p => p._id));
+        // Get total count for pagination
+        const totalProducts = await Order.aggregate([
+            {
+                $group: {
+                    _id: '$product_id'
+                }
+            },
+            {
+                $count: 'total'
+            }
+        ]);
 
-    return mostOrderedProducts;
-  } catch (error) {
-    return {
-      success: false,
-      message: error.message,
-      data: []
-    };
-  }
-}
+        const total = totalProducts[0]?.total || 0;
 
+        res.json({
+            success: true,
+            data: {
+                salesStats,
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching product sales stats:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch product sales statistics',
+            message: error.message
+        });
+    }
+};
 
 export default {
-  getProducts
+  getProducts,
+  getProductSalesStats
 };

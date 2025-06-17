@@ -248,26 +248,38 @@ ProductSchema.pre('save', function (next) {
   next();
 });
 
-// Function to create dynamic indexes based on query patterns
+// Enhanced function to create dynamic indexes based on query patterns
 const createDynamicIndex = async (queryPattern) => {
   try {
     const indexFields = { isAvailable: 1 };
+    const sortFields = new Set();
     
     // Add fields from query pattern to index
-    Object.keys(queryPattern).forEach(field => {
-      if (field.startsWith('attributes.')) {
+    Object.entries(queryPattern).forEach(([field, value]) => {
+      // Handle special fields
+      if (field === 'price') {
         indexFields[field] = 1;
-      } else if (field === 'categories' || field === 'collections' || field === 'tags') {
+        sortFields.add(field);
+      } else if (field === 'createdAt') {
+        indexFields[field] = -1;
+        sortFields.add(field);
+      } else if (field.startsWith('attributes.')) {
         indexFields[field] = 1;
-      } else if (field === 'price') {
+      } else if (['categories', 'collections', 'tags'].includes(field)) {
         indexFields[field] = 1;
-      } else if (field === 'brand' || field === 'productGroup' || field === 'productType') {
+      } else if (['brand', 'productGroup', 'productType'].includes(field)) {
         indexFields[field] = 1;
+      } else if (['featured', 'sales'].includes(field)) {
+        indexFields[field] = -1;
+        sortFields.add(field);
+      } else if (field === 'name') {
+        indexFields[field] = 1;
+        sortFields.add(field);
       }
     });
 
-    // Create index name based on fields
-    const indexName = Object.keys(indexFields).join('_');
+    // Create index name based on fields and their order
+    const indexName = `dynamic_${Object.keys(indexFields).join('_')}`;
     
     // Check if index already exists
     const existingIndexes = await mongoose.model('Product').collection.indexes();
@@ -281,7 +293,11 @@ const createDynamicIndex = async (queryPattern) => {
         name: indexName,
         background: true // Create index in background
       });
-      console.log(`Created new index: ${indexName}`);
+      console.log(`Created new dynamic index: ${indexName}`);
+      
+      // Log index details for monitoring
+      console.log('Index fields:', indexFields);
+      console.log('Sort fields:', Array.from(sortFields));
     }
 
     return indexName;
@@ -291,23 +307,247 @@ const createDynamicIndex = async (queryPattern) => {
   }
 };
 
-// Function to track query patterns
+// Enhanced query pattern tracker with more sophisticated pattern analysis
 const queryPatternTracker = {
   patterns: new Map(),
-  threshold: 100, // Number of times a pattern must be seen before creating an index
+  threshold: 50, // Reduced threshold to create indexes more quickly
+  maxPatterns: 100, // Maximum number of patterns to track
+  patternStats: new Map(), // Track pattern statistics
   
   trackQuery: function(query) {
-    const patternKey = JSON.stringify(query);
-    const count = (this.patterns.get(patternKey) || 0) + 1;
-    this.patterns.set(patternKey, count);
-    
-    if (count === this.threshold) {
-      createDynamicIndex(JSON.parse(patternKey));
+    try {
+      // Normalize query by removing pagination and sorting
+      const normalizedQuery = this.normalizeQuery(query);
+      const patternKey = JSON.stringify(normalizedQuery);
+      
+      // Update pattern count
+      const count = (this.patterns.get(patternKey) || 0) + 1;
+      this.patterns.set(patternKey, count);
+      
+      // Update pattern statistics
+      const stats = this.patternStats.get(patternKey) || {
+        firstSeen: Date.now(),
+        lastSeen: Date.now(),
+        totalQueries: 0,
+        avgResponseTime: 0
+      };
+      
+      stats.lastSeen = Date.now();
+      stats.totalQueries += 1;
+      this.patternStats.set(patternKey, stats);
+      
+      // Clean up old patterns if we exceed maxPatterns
+      if (this.patterns.size > this.maxPatterns) {
+        this.cleanupOldPatterns();
+      }
+      
+      // Create index if threshold is reached
+      if (count === this.threshold) {
+        console.log(`Pattern reached threshold (${count} queries):`, normalizedQuery);
+        createDynamicIndex(normalizedQuery);
+      }
+      
+      return {
+        patternKey,
+        count,
+        stats: this.patternStats.get(patternKey)
+      };
+    } catch (error) {
+      console.error('Error tracking query pattern:', error);
+      return null;
     }
+  },
+  
+  normalizeQuery: function(query) {
+    const normalized = { ...query };
+    
+    // Remove pagination and sorting fields
+    delete normalized.page;
+    delete normalized.limit;
+    delete normalized.sort;
+    delete normalized.order;
+    
+    // Normalize array fields
+    Object.keys(normalized).forEach(key => {
+      if (Array.isArray(normalized[key])) {
+        normalized[key] = normalized[key].sort().join(',');
+      }
+    });
+    
+    return normalized;
+  },
+  
+  cleanupOldPatterns: function() {
+    const now = Date.now();
+    const oldPatterns = Array.from(this.patterns.entries())
+      .filter(([_, count]) => count < this.threshold / 2)
+      .map(([key]) => key);
+    
+    oldPatterns.forEach(key => {
+      this.patterns.delete(key);
+      this.patternStats.delete(key);
+    });
+    
+    console.log(`Cleaned up ${oldPatterns.length} old patterns`);
+  },
+  
+  getPatternStats: function() {
+    return {
+      totalPatterns: this.patterns.size,
+      activePatterns: Array.from(this.patterns.entries())
+        .filter(([_, count]) => count >= this.threshold)
+        .length,
+      topPatterns: Array.from(this.patterns.entries())
+        .sort(([_, a], [__, b]) => b - a)
+        .slice(0, 10)
+        .map(([key, count]) => ({
+          pattern: JSON.parse(key),
+          count,
+          stats: this.patternStats.get(key)
+        }))
+    };
   }
 };
 
-// Export the functions
+// Export the enhanced functions
 export { createDynamicIndex, queryPatternTracker };
+
+// Add optimized compound indexes for pagination and sorting
+ProductSchema.index({ 
+  isAvailable: 1,
+  createdAt: -1,
+  price: 1
+}, { name: 'pagination_created_price' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  createdAt: -1,
+  price: 1
+}, { name: 'pagination_collection_created_price' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  'attributes.color': 1,
+  createdAt: -1
+}, { name: 'pagination_collection_color_created' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  'attributes.color': 1,
+  price: 1,
+  createdAt: -1
+}, { name: 'pagination_collection_color_price_created' });
+
+// Add indexes for common filter combinations with pagination
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  'attributes.color': 1,
+  'attributes.size': 1,
+  createdAt: -1
+}, { name: 'pagination_collection_color_size' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  brand: 1,
+  createdAt: -1
+}, { name: 'pagination_collection_brand' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  'attributes.fabric': 1,
+  createdAt: -1
+}, { name: 'pagination_collection_fabric' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  'attributes.work': 1,
+  createdAt: -1
+}, { name: 'pagination_collection_work' });
+
+// Add indexes for price range queries with pagination
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  price: 1,
+  createdAt: -1
+}, { name: 'pagination_collection_price' });
+
+// Add indexes for search with pagination
+ProductSchema.index({ 
+  isAvailable: 1,
+  name: 'text',
+  createdAt: -1
+}, { name: 'pagination_search_name' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  name: 'text',
+  createdAt: -1
+}, { name: 'pagination_search_collection_name' });
+
+// Add indexes for sorting options
+ProductSchema.index({ 
+  isAvailable: 1,
+  featured: -1,
+  createdAt: -1
+}, { name: 'sort_featured' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  sales: -1,
+  createdAt: -1
+}, { name: 'sort_best_selling' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  name: 1,
+  createdAt: -1
+}, { name: 'sort_alphabetical_asc' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  name: -1,
+  createdAt: -1
+}, { name: 'sort_alphabetical_desc' });
+
+// Add indexes for collection-specific sorting
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  featured: -1,
+  createdAt: -1
+}, { name: 'collection_sort_featured' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  sales: -1,
+  createdAt: -1
+}, { name: 'collection_sort_best_selling' });
+
+// Add indexes for filter combinations with sorting
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  'attributes.color': 1,
+  price: 1,
+  createdAt: -1
+}, { name: 'filter_sort_price' });
+
+ProductSchema.index({ 
+  isAvailable: 1,
+  collections: 1,
+  brand: 1,
+  price: 1,
+  createdAt: -1
+}, { name: 'filter_sort_brand_price' });
 
 export default mongoose.model("Product", ProductSchema, "products");
