@@ -8,12 +8,12 @@ import { buildSharedQuery } from './productController.js';
  * 
  * filterCache: Stores computed filter results
  * - Capacity: 2000 entries
- * - TTL: 30 minutes
+ * - TTL: 5 days
  * - Cleanup: Every 5 minutes
  */
 const filterCache = new AdvancedCache({
   maxSize: 2000,
-  timeout: 30 * 60 * 1000, // 30 minutes
+  timeout: 5 * 24 * 60 * 60 * 1000, // 5 days
   cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
 
