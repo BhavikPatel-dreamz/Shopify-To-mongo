@@ -69,13 +69,25 @@ export const buildSharedQuery = async (queryParams) => {
     fabric,
     work,
     collections,
-    style
+    style,
+    id,
+    productId
   } = queryParams;
 
   // Base query - always include available products
   const query = {
     isAvailable: true
   };
+
+  // Filter by id or productId if provided
+  if (id) {
+    query.productId = id;
+    return query;
+  }
+  if (productId) {
+    query.productId = productId;
+    return query;
+  }
 
   // Handle search
   if (search && search.length >= 3) {
@@ -178,6 +190,7 @@ export const buildSharedQuery = async (queryParams) => {
     if (maxPrice) query.price.$lte = parseFloat(maxPrice);
   }
 
+  console.log(query);
   return query;
 };
 
@@ -225,6 +238,7 @@ const getProducts = async (req, res) => {
   try {
     const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', bypassCache = false, ...filters } = req.query;
     
+    
     // Include pagination and sorting in cache key
     const cacheFilters = {
       ...filters,
@@ -249,6 +263,7 @@ const getProducts = async (req, res) => {
     console.log('Cache miss or bypassed - fetching from database');
 
     const query = await buildSharedQuery(filters);
+    console.log(query);
     
     // Calculate pagination
     const pageNum = parseInt(page);
@@ -261,78 +276,102 @@ const getProducts = async (req, res) => {
       case 'featured':
         sortOptions = { featured: -1 };
         break;
-      case 'best_seller':
-        // Get product sales data for bestseller sorting
-        const productSales = await Order.aggregate([
-          {
-            $group: {
-              _id: '$product_id',
-              totalQuantity: { $sum: '$quantity' },
-              orderCount: { $sum: 1 }
-            }
-          },
-          {
-            $sort: { totalQuantity: -1 }
-          }
-        ]);
-
-        // Create a map of product_id to sales rank
-        const salesRankMap = new Map(
-          productSales.map((item, index) => [item._id, index + 1])
-        );
-
-        // Get products with their sales rank
-        const products = await Product.find(query)
-          .skip(skip)
-          .limit(limitNum)
-          .lean();
-
-        // Add sales rank to products
-        const productsWithRank = products.map(product => {
-          const salesData = productSales.find(s => s._id === product.productId);
-          const salesRank = salesRankMap.get(product.productId) || 0;
-          return {
-            ...product,
-            salesRank,
-            totalSales: salesData?.totalQuantity || 0,
-            orderCount: salesData?.orderCount || 0
-          };
-        });
-
-        // Sort products by sales rank
-        productsWithRank.sort((a, b) => {
-          if (a.salesRank === 0 && b.salesRank === 0) return 0;
-          if (a.salesRank === 0) return 1;
-          if (b.salesRank === 0) return -1;
-          return a.salesRank - b.salesRank;
-        });
-
-        const total = await Product.countDocuments(query);
-
-        const response = {
-          success: true,
-          data: {
-            products: productsWithRank.map(product => ({
-              ...product,
-              productUrl: product.productUrl
-            })),
-            pagination: {
-              total,
-              page: pageNum,
-              limit: limitNum,
-              pages: Math.ceil(total / limitNum)
-            },
-            filters: req.query,
-            totalAvailableProducts: total
-          }
-        };
-
-        // Store in cache only if not bypassing
-        if (!bypassCache) {
-          productCache.set(baseKey, response);
-        }
+        case 'best_seller': {
+          // Step 1: Build full product query
+          const productQuery = await buildSharedQuery(filters);
         
-        return res.json(response);
+          // Step 2: Find all matching productIds based on productQuery
+          const matchingProducts = await Product.find(productQuery, { productId: 1 }).lean();
+          const matchingProductIds = matchingProducts.map(p => p.productId);
+        
+          if (matchingProductIds.length === 0) {
+            return res.json({
+              success: true,
+              data: {
+                products: [],
+                pagination: {
+                  total: 0,
+                  page: pageNum,
+                  limit: limitNum,
+                  pages: 0
+                },
+                filters: req.query,
+                totalAvailableProducts: 0
+              }
+            });
+          }
+        
+          // Step 3: Aggregate orders only for matched productIds
+          const bestSellers = await Order.aggregate([
+            {
+              $match: {
+                product_id: { $in: matchingProductIds }
+              }
+            },
+            {
+              $group: {
+                _id: '$product_id',
+                totalSold: { $sum: '$quantity' }
+              }
+            },
+            { $sort: { totalSold: -1 } },
+            { $skip: skip },
+            { $limit: limitNum }
+          ]);
+        
+          const bestSellerProductIds = bestSellers.map(item => item._id);
+          const salesMap = new Map(bestSellers.map(item => [item._id, item.totalSold]));
+        
+          // Step 4: Fetch actual product documents by IDs
+          const products = await Product.find({ productId: { $in: bestSellerProductIds } }).lean();
+        
+          // Step 5: Reorder to match best sellers order
+          const orderedProducts = bestSellerProductIds.map(pid => {
+            const product = products.find(p => p.productId === pid);
+            return {
+              ...product,
+              totalSaleQty: salesMap.get(pid) || 0,
+              productUrl: product?.productUrl
+            };
+          }).filter(Boolean);
+        
+          // Step 6: Count all best seller products (matching filter)
+          const totalCount = await Order.aggregate([
+            {
+              $match: {
+                product_id: { $in: matchingProductIds }
+              }
+            },
+            {
+              $group: {
+                _id: '$product_id'
+              }
+            },
+            { $count: 'total' }
+          ]);
+          const total = totalCount[0]?.total || 0;
+        
+          const response = {
+            success: true,
+            data: {
+              products: orderedProducts,
+              pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                pages: Math.ceil(total / limitNum)
+              },
+              filters: req.query,
+              totalAvailableProducts: total
+            }
+          };
+        
+          if (!bypassCache) {
+            productCache.set(baseKey, response);
+          }
+        
+          return res.json(response);
+        }
       case 'alphabetical_asc':
         sortOptions = { name: 1 };
         break;
@@ -365,13 +404,24 @@ const getProducts = async (req, res) => {
       Product.countDocuments(query)
     ]);
 
+    // Fetch sales data for products in this page
+    const productIds = products.map(p => p.productId);
+    const salesData = await Order.aggregate([
+      { $match: { product_id: { $in: productIds } } },
+      { $group: { _id: '$product_id', totalSaleQty: { $sum: '$quantity' } } }
+    ]);
+    const salesDataMap = new Map(salesData.map(item => [item._id, item.totalSaleQty]));
+
+    const productsWithSaleQty = products.map(product => ({
+      ...product,
+      totalSaleQty: salesDataMap.get(product.productId) || 0,
+      productUrl: product.productUrl
+    }));
+
     const response = {
       success: true,
       data: {
-        products: products.map(product => ({
-          ...product,
-          productUrl: product.productUrl
-        })),
+        products: productsWithSaleQty,
         pagination: {
           total,
           page: pageNum,
@@ -467,6 +517,52 @@ export const getProductSalesStats = async (req, res) => {
         });
     }
 };
+
+async function getBestSellingProducts(limit = 10, matchParams = {}) {
+  const bestSellers = await Order.aggregate([
+    // Optional: Filter by extra conditions (like date range)
+    { $match: matchParams },
+
+    // Group by product_id and sum the quantity
+    {
+      $group: {
+        _id: '$product_id',
+        totalSold: { $sum: '$quantity' },
+      },
+    },
+
+    // Sort by total quantity sold, descending
+    { $sort: { totalSold: -1 } },
+
+    // Limit results
+    { $limit: limit },
+
+    // Lookup product details from Product collection
+    {
+      $lookup: {
+        from: 'products',               // must match actual collection name
+        localField: '_id',              // product_id in order collection
+        foreignField: 'productId',      // productId in product collection
+        as: 'product',
+      },
+    },
+
+    // Unwind product array to object
+    { $unwind: '$product' },
+
+    // Project the final output
+    {
+      $project: {
+        _id: 0,
+        productId: '$_id',
+        totalSold: 1,
+        product: 1,
+      },
+    },
+  ]);
+
+  return bestSellers;
+}
 
 export default {
   getProducts,

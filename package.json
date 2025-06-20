@@ -11,7 +11,8 @@
     "migrate-products": "node migrations/migrateShopifyProducts.js",
     "migrate-collection-products": "node migrations/migrateCollectionProducts.js",
     "migrate-collections": "node migrations/migrateShopifyCollections.js",
-    "migrate-all": "npm run migrate-collections && npm run migrate-collection-products && npm run migrate-products"
+    "migrate-orders": "node migrations/migrateShopifyOrders.js",
+    "migrate-all": "npm run migrate-collections && npm run migrate-collection-products && npm run migrate-products && npm run migrate-orders"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^1.1.2",
