@@ -5,7 +5,7 @@ import Order from '../models/Order.js';
 const cleanupOldOrders = async () => {
     try {
         const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 36);
 
         const result = await Order.deleteMany({
             createdAt: { $lt: threeMonthsAgo }
