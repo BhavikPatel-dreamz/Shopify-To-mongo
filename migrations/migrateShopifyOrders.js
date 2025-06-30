@@ -121,6 +121,6 @@ syncShopifyOrders().catch(err => {
 
 //Run daily at midnight
 export const startOrderAddedJob = () => {
-  cron.schedule('0 0 * * * *', syncShopifyOrders);
+  cron.schedule('0 0 * * *', syncShopifyOrders);
   console.log('Order added job scheduled');
 };
