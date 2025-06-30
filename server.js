@@ -5,6 +5,7 @@ import connectDB from './config/database.js';
 import routes from './routes/index.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import { startOrderCleanupJob } from './cron/cleanupOrders.js';
+import { startOrderAddedJob } from './migrations/migrateShopifyOrders.js';
 //import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
 const app = express();
@@ -13,9 +14,11 @@ const PORT = process.env.PORT || 3000;
 // Connect to MongoDB
 connectDB();
 
+
 // Start the order cleanup cron job
 startOrderCleanupJob();
-
+// Start the order added cron job
+startOrderAddedJob();
 // Middleware
 app.use(cors());
 app.use(json());

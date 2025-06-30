@@ -4,6 +4,7 @@ import connectDB from '../config/database.js';
 import { shopifyClient } from '../config/shopify.js';
 import { ordersQuery } from '../graphql/queries/orders.js';
 import MigrationState from '../models/MigrationState.js';
+import cron from 'node-cron';
 import mongoose from 'mongoose';
 
 // Define OrderIndex model if not already defined
@@ -46,10 +47,10 @@ async function syncShopifyOrders() {
   let hasNextPage = true;
   let cursor = await getLastCursor();
   let totalProcessed = 0;
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  const createdAtQuery = `created_at:>=${sixMonthsAgo.toISOString().split('T')[0]}`;
-
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate()-1);
+  const createdAtQuery = `created_at:>=${yesterday.toISOString().split('T')[0]}`// YYYY-MM-DD 
+  
   if (cursor) {
     console.log('Resuming order migration from cursor:', cursor);
   } else {
@@ -61,40 +62,35 @@ async function syncShopifyOrders() {
       const data = await shopifyClient.query(ordersQuery, { cursor, createdAtQuery });
       const orders = data.orders.edges;
 
-      console.log(orders);
 
-
-
-       for (const edge of orders) {
-         const order = edge.node;
-         let orderTotalQty = 0;
-
-      
+      for (const edge of orders) {
+        const order = edge.node;
+        let orderTotalQty = 0;
 
         for (const itemEdge of order.lineItems.edges) {
-           const item = itemEdge.node;
-           if(item.product)
-           { 
-             orderTotalQty += item.quantity;
-             await Order.findOneAndUpdate(
-               {
-                 order_id: Number(order.id.split('/').pop()),
-                 product_id: item.product.id.split('/').pop(),
-               },
-               {
-                 $set: {
-                   order_id: Number(order.id.split('/').pop()),       // Make sure it's a Number
-                   product_id: item.product.id.split('/').pop(),      // Keep as String
-                   quantity: item.quantity,
-                   createdAt: new Date(order.createdAt),              // Convert to JS Date
-                   updatedAt: new Date()   
-                 },
-               },
-               { upsert: true }
-             );
-           }
-           
-         }
+          const item = itemEdge.node;
+          console.log(order.createdAt)
+          if (item.product) {
+            orderTotalQty += item.quantity;
+            await Order.findOneAndUpdate(
+              {
+                order_id: Number(order.id.split('/').pop()),
+                product_id: item.product.id.split('/').pop(),
+              },
+              {
+                $set: {
+                  order_id: Number(order.id.split('/').pop()),       // Make sure it's a Number
+                  product_id: item.product.id.split('/').pop(),      // Keep as String
+                  quantity: item.quantity,
+                  createdAt: new Date(order.createdAt),              // Convert to JS Date
+                  updatedAt: new Date()
+                },
+              },
+              { upsert: true }
+            );
+          }
+
+        }
         // Upsert order index with total quantity
         await OrderIndex.findOneAndUpdate(
           { order_id: Number(order.id.split('/').pop()) },
@@ -121,3 +117,10 @@ syncShopifyOrders().catch(err => {
   console.error('Error syncing Shopify orders:', err);
   process.exit(1);
 }); 
+
+
+//Run daily at midnight
+export const startOrderAddedJob = () => {
+  cron.schedule('0 0 * * * *', syncShopifyOrders);
+  console.log('Order added job scheduled');
+};
