@@ -48,8 +48,8 @@ async function syncShopifyOrders() {
   let cursor = await getLastCursor();
   let totalProcessed = 0;
   const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate()-1);
-  const createdAtQuery = `created_at:>=${yesterday.toISOString().split('T')[0]}`// YYYY-MM-DD 
+  yesterday.setDate(yesterday.getDate() - 1);
+  const createdAtQuery = `created_at:>=${yesterday.toISOString().split('T')[0]}`; // YYYY-MM-DD 
   
   if (cursor) {
     console.log('Resuming order migration from cursor:', cursor);
@@ -62,6 +62,11 @@ async function syncShopifyOrders() {
       const data = await shopifyClient.query(ordersQuery, { cursor, createdAtQuery });
       const orders = data.orders.edges;
 
+      // Check if we actually have orders
+      if (!orders || orders.length === 0) {
+        console.log('No orders found in this batch');
+        break;
+      }
 
       for (const edge of orders) {
         const order = edge.node;
@@ -109,14 +114,9 @@ async function syncShopifyOrders() {
       break;
     }
   }
-  console.log('Shopify order sync complete.');
-  process.exit(0);
+  
+  console.log(`Shopify order sync complete. Total processed: ${totalProcessed}`);
 }
-
-syncShopifyOrders().catch(err => {
-  console.error('Error syncing Shopify orders:', err);
-  process.exit(1);
-}); 
 
 
 //Run daily at midnight
