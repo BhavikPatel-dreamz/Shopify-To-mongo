@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleProductUpdate, handleOrderUpdate } from '../controllers/webhookController.js';
+import { handleProductUpdate, handleOrderUpdate, handleProductDelete } from '../controllers/webhookController.js';
 import verifyShopifyWebhook from '../middleware/verifyWebhook.js';
 
 const router = express.Router();
@@ -9,6 +9,11 @@ router.post('/product-update',
   express.raw({type: 'application/json'}),
   //verifyShopifyWebhook,
   handleProductUpdate
+);
+router.post('/product-delete', 
+  express.raw({type: 'application/json'}),
+  //verifyShopifyWebhook,
+  handleProductDelete
 );
 
 // Order update webhook with verification

@@ -41,6 +41,19 @@ export const handleProductUpdate = async (req, res) => {
   }
 };
 
+export const handleProductDelete = async (req, res) => {
+    try {
+        const productData = req.body;
+        
+        await Product.findOneAndDelete( { shopifyId: productData.shopifyId });
+        
+        res.status(200).json({ success: true , message: 'Product deleted successfully' });
+    } catch (error) {
+        console.error('Webhook Error:', error);
+        res.status(500).json({ error: 'Failed to process webhook' });
+    }
+};
+
 export const handleOrderUpdate = async (req, res) => {
     try {
         const orderData = req.body;
