@@ -1,8 +1,8 @@
 import { gql } from 'graphql-request';
 
 export const productsQuery = gql`
-  query fetchProducts($cursor: String) {
-    products(first: 250, after: $cursor) {
+  query fetchProducts($cursor: String, $updatedAtQuery: String) {
+    products(first: 250, after: $cursor, query: $updatedAtQuery) {
       pageInfo {
         hasNextPage
         endCursor

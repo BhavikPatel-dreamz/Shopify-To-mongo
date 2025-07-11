@@ -5,6 +5,7 @@ import connectDB from './config/database.js';
 import routes from './routes/index.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import { startOrderCleanupJob } from './cron/cleanupOrders.js';
+import { startProductAddedJob } from './migrations/migrateShopifyProducts.js';
 import { startOrderAddedJob } from './migrations/migrateShopifyOrders.js';
 //import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
@@ -19,6 +20,8 @@ connectDB();
 startOrderCleanupJob();
 // Start the order added cron job
 startOrderAddedJob();
+// Start the product migration cron job
+startProductAddedJob();
 // Middleware
 app.use(cors());
 app.use(json());

@@ -4,6 +4,7 @@ import { shopifyClient } from '../config/shopify.js';
 import { productsQuery } from '../graphql/queries/products.js';
 import processBatch from './products/processBatch.js';
 import MigrationState from '../models/MigrationState.js';
+import cron from "node-cron";
 
 // Initialize MongoDB connection
 await connectDB();
@@ -88,6 +89,47 @@ async function migrateProducts() {
   process.exit(0);
 }
 
+async function syncShopifyProducts() {
+  let hasNextPage = true;
+  let cursor = await getLastCursor();
+  let totalProcessed = 0;
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const updatedAtQuery = `updated_at:>=${yesterday.toISOString().split('T')[0]}`;
+
+  if (cursor) {
+    console.log('Resuming migration from cursor:', cursor);
+  } else {
+    console.log('Starting new migration from the beginning');
+  }
+
+  while (hasNextPage) {
+    try {
+
+      const data = await shopifyClient.query(productsQuery, { cursor,updatedAtQuery });
+      const products = data.products.edges.map(edge => edge.node);
+      await processBatch(products);
+
+      hasNextPage = data.products.pageInfo.hasNextPage;
+      cursor = data.products.pageInfo.endCursor;
+      totalProcessed += products.length;
+
+      await updateCursorState(cursor, totalProcessed);
+      console.log(`Processed ${totalProcessed} products}`);
+    } catch (error) {
+      console.error('Error during migration:', error);
+      await updateCursorState(cursor, totalProcessed);
+      break;
+    }
+  }
+  console.log(`Migration completed. Total products processed: ${totalProcessed}`);
+}
+
+// Schedule the product added job 
+export const startProductAddedJob = () => {
+  cron.schedule('0 0 * * *', syncShopifyProducts);
+  console.log('Product added job scheduled');
+};
 // Run migration
 migrateProducts().catch(error => {
   console.error('Migration failed:', error);
