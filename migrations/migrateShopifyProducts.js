@@ -73,7 +73,7 @@ async function migrateProducts() {
       // Update the cursor state after each batch
       await updateCursorState(cursor, totalProcessed);
       
-      console.log(`Processed ${totalProcessed} products so far. Current cursor: ${cursor}`);
+      console.log(`Processed ${totalProcessed} products so far.`);
       
       // Add delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -131,7 +131,7 @@ export const startProductAddedJob = () => {
   console.log('Product added job scheduled');
 };
 // Run migration
-migrateProducts().catch(error => {
-  console.error('Migration failed:', error);
-  process.exit(1);
-}); 
+// migrateProducts().catch(error => {
+//   console.error('Migration failed:', error);
+//   process.exit(1);
+// }); 
