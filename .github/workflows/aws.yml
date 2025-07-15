@@ -33,7 +33,7 @@ jobs:
           source: "app.zip"
           target: "/home/${{ secrets.EC2_USER }}/"
 
-      - name: Safe Deploy on EC2
+      - name: Safe Deploy on EC2 with PM2
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -67,7 +67,7 @@ jobs:
             source ~/.nvm/nvm.sh || true
             npm ci --only=production
 
-            echo "Replacing live app..."
+            echo "Deploying to live directory..."
             rm -rf "$LIVE_DIR"
             mv "$TEMP_DIR" "$LIVE_DIR"
 
@@ -76,13 +76,10 @@ jobs:
               mv "$BACKUP_ENV" "$LIVE_DIR/.env"
             fi
 
-            echo "Restarting with PM2..."
+            echo "Restarting single PM2 instance..."
             cd "$LIVE_DIR"
-            pm2 describe "$APP_NAME" > /dev/null
-            if [ $? -eq 0 ]; then
-              pm2 restart "$APP_NAME"
-            else
-              pm2 start server.js --name "$APP_NAME"
-            fi
 
-            echo "✅ Deployment complete!"
+            pm2 delete "$APP_NAME" || true
+            pm2 start server.js --name "$APP_NAME"
+
+            echo "✅ Deployment successful with single PM2 process"
