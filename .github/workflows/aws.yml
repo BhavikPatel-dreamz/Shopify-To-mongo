@@ -1,4 +1,4 @@
-name: Safe Deploy Node.js App to AWS EC2
+name: Deploy Node.js App to AWS EC2 (PM2-safe)
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Zip Project
+      - name: Zip Project (excluding .git & node_modules)
         run: zip -r app.zip . -x "*.git*" "node_modules/*" ".github/*"
 
       - name: Upload to EC2
@@ -33,7 +33,7 @@ jobs:
           source: "app.zip"
           target: "/home/${{ secrets.EC2_USER }}/"
 
-      - name: Safe Deploy on EC2 with PM2
+      - name: Deploy and Start Single PM2 App
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -42,44 +42,42 @@ jobs:
           script: |
             set -e
 
-            APP_NAME="Products-serch"
+            APP_NAME="my-app"
             LIVE_DIR="/var/www/html/Node/$APP_NAME"
             TEMP_DIR="/tmp/deploy-$APP_NAME"
             ARCHIVE="/home/${{ secrets.EC2_USER }}/app.zip"
-            BACKUP_ENV="/tmp/${APP_NAME}.env.backup"
+            BACKUP_ENV="/tmp/$APP_NAME.env.bak"
 
-            echo "Backing up .env if exists..."
+            echo "Backing up .env..."
             if [ -f "$LIVE_DIR/.env" ]; then
               cp "$LIVE_DIR/.env" "$BACKUP_ENV"
             fi
 
-            echo "Preparing temp directory..."
+            echo "Cleaning and preparing temp directory..."
             rm -rf "$TEMP_DIR"
             mkdir -p "$TEMP_DIR"
 
-            echo "Unzipping app..."
+            echo "Unzipping..."
             unzip -o "$ARCHIVE" -d "$TEMP_DIR"
             chmod -R 755 "$TEMP_DIR"
 
             echo "Installing dependencies..."
             cd "$TEMP_DIR"
-            source ~/.bashrc || true
             source ~/.nvm/nvm.sh || true
             npm ci --only=production
 
-            echo "Deploying to live directory..."
+            echo "Replacing live app..."
             rm -rf "$LIVE_DIR"
             mv "$TEMP_DIR" "$LIVE_DIR"
 
+            echo "Restoring .env..."
             if [ -f "$BACKUP_ENV" ]; then
-              echo "Restoring .env..."
               mv "$BACKUP_ENV" "$LIVE_DIR/.env"
             fi
 
-            echo "Restarting single PM2 instance..."
+            echo "Restarting server.js via PM2..."
             cd "$LIVE_DIR"
-
-            pm2 delete "$APP_NAME" || true
+            pm2 delete all || true
             pm2 start server.js --name "$APP_NAME"
 
-            echo "✅ Deployment successful with single PM2 process"
+            echo "✅ Deployed and running: $APP_NAME (server.js only)"
