@@ -5,6 +5,8 @@ import AdvancedCache from '../utils/AdvancedCache.js';
 import Order from '../models/Order.js';
   
 
+
+
 /**
  * Cache Configuration for Products
  * 
@@ -32,6 +34,22 @@ const createCaseInsensitivePatterns = (values) => {
   return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
 };
 
+const createCaseInsensitivePatternsCollentions = (values) => {
+  return terms.map(term => {
+    const normalized = normalizeSearchTerm(term);
+    return { $regex: new RegExp(`^${escapeStringRegexp(normalized)}$`, 'i') };
+  });
+};
+
+
+const normalizeSearchTerm = (term) => {
+  return term
+    .toLowerCase()
+    .replace(/['’]s/g, '')   // remove possessive 's or ’s
+    .replace(/s\b/g, '')     // remove plural trailing 's'
+    .replace(/-/g, ' ')      // replace hyphens with spaces
+    .trim();
+};
 /**
  * Shared query builder for both products and filters
  * 
@@ -129,9 +147,9 @@ export const buildSharedQuery = async (queryParams) => {
   }
 
   if (collections && collections.toLowerCase() !== 'products' && collections.toLowerCase() !== 'all') {
-    const collectionArray = collections.replaceAll('-', ' ').split(',').map(c => c.trim());
+    const collectionArray = collections.replaceAll('-', ' ').split(',').map(c => c.trim()).map(normalizeSearchTerm);
     query.collections = {
-      $in: createCaseInsensitivePatterns(collectionArray)
+      $in: createCaseInsensitivePatternsCollentions(collectionArray)
     };
   }
 
