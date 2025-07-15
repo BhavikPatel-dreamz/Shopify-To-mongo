@@ -288,6 +288,31 @@ ProductSchema.index({
   createdAt: -1
 }, { name: 'filter_facets', background: true });
 
+
+ProductSchema.index({
+  isAvailable: 1,
+  collections: 1,
+  categories: 1,
+  brand: 1,
+  price: 1,
+  createdAt: -1
+}, { name: 'filter_facets_comprehensive', background: true });
+
+ProductSchema.index({
+  isAvailable: 1,
+  'attributes.color': 1,
+  'attributes.size': 1,
+  'attributes.material': 1,
+  price: 1
+}, { name: 'attribute_filter_comprehensive', background: true });
+
+ProductSchema.index({
+  isAvailable: 1,
+  productType: 1,
+  productGroup: 1,
+  createdAt: -1
+}, { name: 'product_type_group_filter', background: true });
+
 // Pre-save middleware
 ProductSchema.pre('save', function (next) {
   this.updatedAt = new Date();

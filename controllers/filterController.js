@@ -94,18 +94,62 @@ const processResults = (items) => {
 const createFacetPipeline = (field, isAttribute = false) => {
   const path = isAttribute ? `$attributes.${field}` : `$${field}`;
   return [
+    { 
+      $match: { 
+        [isAttribute ? `attributes.${field}` : field]: { 
+          $exists: true, 
+          $ne: null 
+        } 
+      } 
+    },
     { $unwind: { path, preserveNullAndEmptyArrays: false } },
-    { $group: { _id: path, count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 1000 } // Limit results to prevent memory issues
+    { 
+      $group: { 
+        _id: path, 
+        count: { $sum: 1 },
+        // Store first occurrence for original casing
+        firstValue: { $first: path }
+      } 
+    },
+    { $sort: { count: -1, _id: 1 } },
+    { $limit: 500 }, // More conservative limit
+    {
+      $project: {
+        _id: 1,
+        count: 1,
+        // Use the first occurrence's casing
+        originalValue: "$firstValue"
+      }
+    }
   ];
 };
 
 const createSimpleFacetPipeline = (field) => [
-  { $match: { [field]: { $ne: null, $exists: true } } },
-  { $group: { _id: `$${field}`, count: { $sum: 1 } } },
-  { $sort: { count: -1 } },
-  { $limit: 1000 } // Limit results to prevent memory issues
+  { 
+    $match: { 
+      [field]: { 
+        $ne: null, 
+        $exists: true,
+        $not: { $size: 0 } // For array fields
+      } 
+    } 
+  },
+  { 
+    $group: { 
+      _id: `$${field}`, 
+      count: { $sum: 1 },
+      firstValue: { $first: `$${field}` }
+    } 
+  },
+  { $sort: { count: -1, _id: 1 } },
+  { $limit: 500 },
+  {
+    $project: {
+      _id: 1,
+      count: 1,
+      originalValue: "$firstValue"
+    }
+  }
 ];
 
 async function getFilterFacets(query) {
@@ -187,37 +231,56 @@ const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) 
 // Optimized best seller logic with batching
 const getBestSellerProducts = async (query) => {
   try {
-    // Use lean() and limit initial fetch
-    const products = await Product.find(query)
+    // First get product IDs that match the query
+    const productIds = await Product.find(query)
+      .select('productId -_id')
       .lean()
-      .limit(10000) // Limit to prevent memory issues
-      .hint({ isAvailable: 1 }); // Use appropriate index
+      .limit(20000) // Increased but still limited
+      .hint({ isAvailable: 1 })
+      .then(products => products.map(p => p.productId));
 
-    if (!products.length) return { products: [], productIds: [] };
+    if (!productIds.length) return { products: [], productIds: [] };
 
-    const productIds = products.map(p => p.productId);
+    // Process sales data in optimized batches
+    const batchSize = 10000;
+    const salesMap = new Map();
     
-    // Process in batches to avoid memory issues
-    const batchSize = 5000;
-    const batches = [];
     for (let i = 0; i < productIds.length; i += batchSize) {
-      batches.push(productIds.slice(i, i + batchSize));
-    }
-
-    const salesData = [];
-    for (const batch of batches) {
+      const batch = productIds.slice(i, i + batchSize);
       const batchSales = await Order.aggregate([
-        { $match: { product_id: { $in: batch } } },
-        { $group: { _id: '$product_id', totalSaleQty: { $sum: '$quantity' } } }
-      ]).option({ maxTimeMS: 15000 });
+        { 
+          $match: { 
+            product_id: { $in: batch },
+            // Only look at recent orders for better performance
+            createdAt: { $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000) }
+          } 
+        },
+        { 
+          $group: { 
+            _id: '$product_id', 
+            totalSaleQty: { $sum: '$quantity' } 
+          } 
+        }
+      ])
+      .option({ maxTimeMS: 20000, allowDiskUse: true });
       
-      salesData.push(...batchSales);
+      batchSales.forEach(item => salesMap.set(item._id, item.totalSaleQty));
     }
 
-    const salesMap = new Map(salesData.map(item => [item._id, item.totalSaleQty]));
+    // Now get the full product data only for products with sales
+    const productsWithSales = await Product.find({
+      productId: { $in: Array.from(salesMap.keys()) },
+      isAvailable: true
+    })
+    .lean()
+    .hint({ productId: 1, isAvailable: 1 });
 
-    const sortedProducts = products
-      .map(p => ({ ...p, totalSaleQty: salesMap.get(p.productId) || 0 }))
+    // Merge sales data and sort
+    const sortedProducts = productsWithSales
+      .map(p => ({
+        ...p,
+        totalSaleQty: salesMap.get(p.productId) || 0
+      }))
       .sort((a, b) => b.totalSaleQty - a.totalSaleQty);
 
     return {
