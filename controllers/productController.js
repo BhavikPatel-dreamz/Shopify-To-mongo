@@ -146,12 +146,32 @@ export const buildSharedQuery = async (queryParams) => {
     query.categories = { $in: createCaseInsensitivePatterns(category) };
   }
 
-  if (collections && collections.toLowerCase() !== 'products' && collections.toLowerCase() !== 'all') {
-    const collectionArray = collections.replaceAll('-', ' ').split(',').map(c => c.trim()).map(normalizeSearchTerm);
-    query.collections = {
-      $in: createCaseInsensitivePatternsCollentions(collectionArray)
-    };
-  }
+  // if (collections && collections.toLowerCase() !== 'products' && collections.toLowerCase() !== 'all') {
+  //   const collectionArray = collections.replaceAll('-', ' ').split(',').map(c => c.trim()).map(normalizeSearchTerm);
+  //   query.collections = {
+  //     $in: createCaseInsensitivePatternsCollentions(collectionArray)
+  //   };
+  // }
+  if (
+  collections &&
+  collections.toLowerCase() !== 'products' &&
+  collections.toLowerCase() !== 'all'
+) {
+  const collectionArray = collections.split(',').map(c => c.trim());
+
+  query.collections = {
+    $in: collectionArray.map(keyword => {
+      const normalized = keyword
+        .replaceAll('-', ' ')       // "all-lehengas" → "all lehengas"
+        .replace(/'s$/i, '')        // remove trailing 's
+        .replace(/s$/i, '')         // remove plural s
+        .trim()
+        .toLowerCase();
+
+      return new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+    })
+  };
+}
 
   if (tags) {
     query.tags = { $in: createCaseInsensitivePatterns(tags) };
