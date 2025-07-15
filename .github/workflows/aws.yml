@@ -22,7 +22,7 @@ jobs:
         run: npm install
 
       - name: Zip Project
-        run: zip -r app.zip . -x "*.git*" "node_modules/*" "*.github/*"
+        run: zip -r app.zip . -x "*.git*" "node_modules/*" ".github/*"
 
       - name: Upload to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -42,44 +42,47 @@ jobs:
           script: |
             set -e
 
-            LIVE_DIR="/var/www/html/Node/Products-serch"
-            TEMP_DIR="/home/ubuntu/simpleandshober"
-            BACKUP_ENV="/tmp/env_backup"
+            APP_NAME="Products-serch"
+            LIVE_DIR="/var/www/html/Node/$APP_NAME"
+            TEMP_DIR="/tmp/deploy-$APP_NAME"
+            ARCHIVE="/home/${{ secrets.EC2_USER }}/app.zip"
+            BACKUP_ENV="/tmp/${APP_NAME}.env.backup"
 
-            # Backup existing .env if it exists
+            echo "Backing up .env if exists..."
             if [ -f "$LIVE_DIR/.env" ]; then
-              echo "Backing up existing .env..."
-              cp $LIVE_DIR/.env $BACKUP_ENV
+              cp "$LIVE_DIR/.env" "$BACKUP_ENV"
             fi
 
-            echo "Cleaning temp directory..."
-            sudo rm -rf $TEMP_DIR
-            sudo mkdir -p $TEMP_DIR
+            echo "Preparing temp directory..."
+            rm -rf "$TEMP_DIR"
+            mkdir -p "$TEMP_DIR"
 
-            echo "Unzipping new project to temp..."
-            sudo unzip -o /home/${{ secrets.EC2_USER }}/app.zip -d $TEMP_DIR
-            sudo chmod -R 777 $TEMP_DIR
-
-            # Load environment so node/npm work
-            source ~/.bashrc || true
-            source ~/.nvm/nvm.sh || true
+            echo "Unzipping app..."
+            unzip -o "$ARCHIVE" -d "$TEMP_DIR"
+            chmod -R 755 "$TEMP_DIR"
 
             echo "Installing dependencies..."
-            cd $TEMP_DIR
-            npm install --production --verbose || { echo "Install failed. Aborting deploy."; exit 1; }
+            cd "$TEMP_DIR"
+            source ~/.bashrc || true
+            source ~/.nvm/nvm.sh || true
+            npm ci --only=production
 
-            echo "Deploying to live folder..."
-            sudo rm -rf $LIVE_DIR
-            sudo mv $TEMP_DIR $LIVE_DIR
+            echo "Replacing live app..."
+            rm -rf "$LIVE_DIR"
+            mv "$TEMP_DIR" "$LIVE_DIR"
 
-            # Restore .env
             if [ -f "$BACKUP_ENV" ]; then
-              echo "Restoring .env file..."
-              mv $BACKUP_ENV $LIVE_DIR/.env
+              echo "Restoring .env..."
+              mv "$BACKUP_ENV" "$LIVE_DIR/.env"
             fi
 
-            echo "Restarting app with PM2..."
-            cd $LIVE_DIR
-            pm2 restart Products-serch || pm2 start server.js --name "Products-serch"
+            echo "Restarting with PM2..."
+            cd "$LIVE_DIR"
+            pm2 describe "$APP_NAME" > /dev/null
+            if [ $? -eq 0 ]; then
+              pm2 restart "$APP_NAME"
+            else
+              pm2 start server.js --name "$APP_NAME"
+            fi
 
-            echo "✅ Deployment successful (with .env preserved)"
+            echo "✅ Deployment complete!"
