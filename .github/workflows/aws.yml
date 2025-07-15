@@ -77,7 +77,7 @@ jobs:
 
             echo "Restarting server.js via PM2..."
             cd "$LIVE_DIR"
-            pm2 delete all || true
+            pm2 stop all || true
             pm2 start server.js --name "$APP_NAME"
 
             echo "✅ Deployed and running: $APP_NAME (server.js only)"
