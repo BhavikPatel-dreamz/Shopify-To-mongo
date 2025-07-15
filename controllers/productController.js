@@ -152,7 +152,7 @@ export const buildSharedQuery = async (queryParams) => {
   //     $in: createCaseInsensitivePatternsCollentions(collectionArray)
   //   };
   // }
-  if (
+if (
   collections &&
   collections.toLowerCase() !== 'products' &&
   collections.toLowerCase() !== 'all'
@@ -161,18 +161,16 @@ export const buildSharedQuery = async (queryParams) => {
 
   query.collections = {
     $in: collectionArray.map(keyword => {
-
-      if('all-lehengas'==keyword) return "All Lehenga's"
+      if ('all-lehengas' === keyword) return "All Lehenga's";
       else {
+        const normalized = keyword
+          .replaceAll('-', ' ')       // "all-lehengas" → "all lehengas"
+          .replace(/'s$/i, '')        // remove trailing 's
+          .replace(/s$/i, '')         // remove plural s
+          .trim()
+          .toLowerCase();
 
-      const normalized = keyword
-        .replaceAll('-', ' ')       // "all-lehengas" → "all lehengas"
-        .replace(/'s$/i, '')        // remove trailing 's
-        .replace(/s$/i, '')         // remove plural s
-        .trim()
-        .toLowerCase();
-
-      return new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+        return new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
       }
     })
   };
