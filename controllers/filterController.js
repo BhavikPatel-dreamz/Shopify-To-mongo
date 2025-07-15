@@ -41,13 +41,14 @@ const normalizeValue = (value) => {
   if (!value) return '';
   
   // Handle special case for 'all-lehengas'
-  // if (value === 'all-lehengas') {
-  //   return "All Lehenga's";
-  // }
+  if (value === 'all-lehengas') {
+    return "all lehenga's";
+  }
   
-  // Standard normalization
+  // Standard normalization - always return a string
   const normalized = value
     .toString()
+    .replaceAll('-', ' ')   
     .replace(/-/g, ' ')         // "all-lehengas" → "all lehengas"
     .replace(/'s$/i, '')        // remove trailing 's
     .replace(/s$/i, '')         // remove plural s
@@ -106,8 +107,10 @@ const processResults = (items) => {
       if (b.count !== a.count) {
         return b.count - a.count;
       }
-      // Then alphabetically
-      return normalizeValue(a.value).localeCompare(normalizeValue(b.value));
+      // Then alphabetically - ensure both values are strings
+      const aValue = normalizeValue(a.value) || '';
+      const bValue = normalizeValue(b.value) || '';
+      return aValue.localeCompare(bValue);
     });
 };
 
