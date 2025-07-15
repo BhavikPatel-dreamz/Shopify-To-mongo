@@ -41,9 +41,9 @@ const normalizeValue = (value) => {
   if (!value) return '';
   
   // Handle special case for 'all-lehengas'
-  if (value === 'all-lehengas') {
-    return "All Lehenga's";
-  }
+  // if (value === 'all-lehengas') {
+  //   return "All Lehenga's";
+  // }
   
   // Standard normalization
   const normalized = value
@@ -162,7 +162,7 @@ async function getFilterFacets(query) {
     const result = await Product.aggregate([
       { $match: query },
       { $facet: facetStage }
-    ]).option({ maxTimeMS: 30000, allowDiskUse: true });
+    ]).option({ maxTimeMS: 60000, allowDiskUse: true });
 
     return result[0] || {};
   } catch (error) {
