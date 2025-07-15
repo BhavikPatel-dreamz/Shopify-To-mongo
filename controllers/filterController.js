@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import Order from '../models/Order.js';
 import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
 import { buildSharedQuery } from './productController.js';
@@ -50,6 +51,7 @@ const normalizeValue = (value) => {
         return new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
       }
 };
+
 /**
  * Processes and sorts filter result items
  * Merges same values with different cases and combines their counts
@@ -58,7 +60,7 @@ const processResults = (items) => {
   // First, normalize and merge counts for same values
   const mergedCounts = items.reduce((acc, item) => {
     if (!item._id) return acc;
-    
+
     const normalizedValue = normalizeValue(item._id);
     if (!normalizedValue) return acc;
 
@@ -71,7 +73,7 @@ const processResults = (items) => {
     } else {
       acc[normalizedValue].count += item.count;
     }
-    
+
     return acc;
   }, {});
 
@@ -95,196 +97,196 @@ const processResults = (items) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
+
+// Optimized aggregation pipelines
+const createFacetPipeline = (field, isAttribute = false) => {
+  const path = isAttribute ? `$attributes.${field}` : `$${field}`;
+  return [
+    { $unwind: { path, preserveNullAndEmptyArrays: false } },
+    { $group: { _id: path, count: { $sum: 1 } } },
+    { $sort: { count: -1 } }
+  ];
+};
+
+const createSimpleFacetPipeline = (field) => [
+  { $match: { [field]: { $ne: null } } },
+  { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+  { $sort: { count: -1 } }
+];
+
+async function getFilterFacets(query) {
+  const facetStage = {
+    categories: createFacetPipeline('categories'),
+    collections: createFacetPipeline('collections'),
+    colors: createFacetPipeline('color', true),
+    sizes: createFacetPipeline('size', true),
+    materials: createFacetPipeline('material', true),
+    seasons: createFacetPipeline('season', true),
+    genders: createFacetPipeline('gender', true),
+    fabrics: createFacetPipeline('fabric', true),
+    works: createFacetPipeline('work', true),
+    productGroups: createSimpleFacetPipeline('productGroup'),
+    productTypes: createSimpleFacetPipeline('productType'),
+    brands: createSimpleFacetPipeline('brand'),
+    priceRange: [{
+      $group: {
+        _id: null,
+        minPrice: { $min: '$price' },
+        maxPrice: { $max: '$price' }
+      }
+    }]
+  };
+
+  return await Product.aggregate([
+    { $match: query },
+    { $facet: facetStage }
+  ]).option({ maxTimeMS: 30000, allowDiskUse: true });
+}
+
+// Utility functions
+const getPriceRange = async (query) => {
+  const stats = await Product.aggregate([
+    { $match: query },
+    { $group: { _id: null, minPrice: { $min: '$price' }, maxPrice: { $max: '$price' } } }
+  ]);
+  return stats[0] || { minPrice: 0, maxPrice: 1000 };
+};
+
+const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) => {
+  const matchStage = { ...baseQuery, isAvailable: true };
+  if (bestSellerIds) matchStage.productId = { $in: bestSellerIds };
+
+  const brands = await Product.aggregate([
+    { $match: matchStage },
+    { $group: { _id: '$brand', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $match: { _id: { $ne: null } } }
+  ]).option({ maxTimeMS: 15000, allowDiskUse: true });
+
+  return brands.map(b => ({
+    value: b._id,
+    count: b.count,
+    selected: selectedBrands.includes(b._id)
+  }));
+};
+
+// Optimized best seller logic
+const getBestSellerProducts = async (query) => {
+  const products = await Product.find(query).lean();
+  if (!products.length) return { products: [], productIds: [] };
+
+  const productIds = products.map(p => p.productId);
+  const salesData = await Order.aggregate([
+    { $match: { product_id: { $in: productIds } } },
+    { $group: { _id: '$product_id', totalSaleQty: { $sum: '$quantity' } } }
+  ]);
+
+  const salesMap = new Map(salesData.map(item => [item._id, item.totalSaleQty]));
+
+  const sortedProducts = products
+    .map(p => ({ ...p, totalSaleQty: salesMap.get(p.productId) || 0 }))
+    .sort((a, b) => b.totalSaleQty - a.totalSaleQty);
+
+  return {
+    products: sortedProducts,
+    productIds: sortedProducts.map(p => p.productId)
+  };
+};
+
+// Build response data
+const buildResponseData = (result, filterParams, sort, currentResultCount, brandsWithSelection, priceStats) => ({
+  success: true,
+  data: {
+    currentResultCount,
+    appliedFilters: filterParams,
+    sortApplied: sort,
+    categories: processResults(result.categories),
+    collections: processResults(result.collections),
+    tags: filterParams.tags ? filterParams.tags.split(',').map(tag => ({
+      value: tag.trim(),
+      count: currentResultCount
+    })) : [],
+    attributes: {
+      colors: processResults(result.colors),
+      sizes: processResults(result.sizes),
+      materials: processResults(result.materials),
+      seasons: processResults(result.seasons),
+      genders: processResults(result.genders),
+      fabrics: processResults(result.fabrics),
+      works: processResults(result.works)
+    },
+    productGroups: processResults(result.productGroups),
+    productTypes: processResults(result.productTypes),
+    brands: brandsWithSelection,
+    priceRange: {
+      min: Math.floor(priceStats.minPrice),
+      max: Math.ceil(priceStats.maxPrice),
+      appliedMin: filterParams.minPrice ? parseFloat(filterParams.minPrice) : undefined,
+      appliedMax: filterParams.maxPrice ? parseFloat(filterParams.maxPrice) : undefined
+    }
+  }
+});
+
+// Main controller - optimized
 const getProductFilters = async (req, res) => {
-  const startTime = Date.now();
   try {
-    // Remove pagination and sorting from filter cache key
     const { page, limit, sort, order, ...filterParams } = req.query;
-    
-    // Generate specific cache key for filters
-    const cacheKey = generateFilterCacheKey(filterParams);
-    
-    // Try to get from cache
-    const cachedResult = filterCache.get(cacheKey);
-    if (cachedResult && filterCache.isValid(cacheKey)) {
-      console.log('Cache hit - Response time:', Date.now() - startTime, 'ms');
-      return res.json(cachedResult);
+    const cacheKey = generateFilterCacheKey({ ...filterParams, sort });
+
+    // Check cache
+    const cached = filterCache.get(cacheKey);
+    if (cached && filterCache.isValid(cacheKey)) {
+      return res.json(cached);
     }
 
     console.log('Cache miss - Building new response');
-    
     const currentQuery = await buildSharedQuery(filterParams);
     queryPatternTracker.trackQuery(currentQuery);
 
-    // Get the current search results count
-    const currentResultCount = await Product.countDocuments(currentQuery);
-    const queryWithoutPrice = { ...currentQuery };
-    delete queryWithoutPrice.price;
-
+    const selectedBrands = filterParams.brand ? filterParams.brand.split(',').map(b => b.trim()) : [];
     const baseQueryWithoutBrand = { ...currentQuery };
     delete baseQueryWithoutBrand.brand;
 
-    const priceStats = await Product.aggregate([
-      { $match: queryWithoutPrice },
-      {
-        $group: {
-          _id: null,
-          minPrice: { $min: "$price" },
-          maxPrice: { $max: "$price" }
-        }
+    let response;
+
+    if (sort === 'best_seller') {
+      const { products, productIds } = await getBestSellerProducts(currentQuery);
+
+      if (!products.length) {
+        response = buildResponseData(
+          { categories: [], collections: [], colors: [], sizes: [], materials: [], seasons: [], genders: [], fabrics: [], works: [], productGroups: [], productTypes: [], brands: [] },
+          filterParams, sort, 0, [], { minPrice: 0, maxPrice: 1000 }
+        );
+      } else {
+        const bestSellerQuery = { productId: { $in: productIds } };
+        const [filterResults, priceStats, brandsWithSelection] = await Promise.all([
+          getFilterFacets(bestSellerQuery),
+          getPriceRange(bestSellerQuery),
+          getBrandsWithSelection(baseQueryWithoutBrand, productIds, selectedBrands)
+        ]);
+
+        response = buildResponseData(
+          filterResults[0], filterParams, sort, productIds.length, brandsWithSelection, priceStats
+        );
       }
-    ]);
-    // Calculate filters based on current search results
-    const filterResults = await Product.aggregate([
-      // First match the current search criteria
-      { $match: currentQuery },
-      {
-        $facet: {
-          categories: [
-            { $unwind: { path: '$categories', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$categories', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          collections: [
-            { $unwind: { path: '$collections', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$collections', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          colors: [
-            { $unwind: { path: '$attributes.color', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.color', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          sizes: [
-            { $unwind: { path: '$attributes.size', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.size', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          materials: [
-            { $unwind: { path: '$attributes.material', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.material', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          seasons: [
-            { $unwind: { path: '$attributes.season', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.season', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          genders: [
-            { $unwind: { path: '$attributes.gender', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.gender', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          productGroups: [
-            { $match: { productGroup: { $ne: null } } },
-            { $group: { _id: '$productGroup', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          productTypes: [
-            { $match: { productType: { $ne: null } } },
-            { $group: { _id: '$productType', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          brands: [
-            { $match: { brand: { $ne: null } } },
-            { $group: { _id: '$brand', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          fabrics: [
-            { $unwind: { path: '$attributes.fabric', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.fabric', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          works: [
-            { $unwind: { path: '$attributes.work', preserveNullAndEmptyArrays: false } },
-            { $group: { _id: '$attributes.work', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          priceRange: [
-            {
-              $group: {
-                _id: null,
-                minPrice: { $min: '$price' },
-                maxPrice: { $max: '$price' }
-              }
-            }
-          ]
-        }
-      }
-    ]).option({ 
-      maxTimeMS: 30000,
-      allowDiskUse: true
-    });
+    } else {
+      const [currentResultCount, filterResults, priceStats, brandsWithSelection] = await Promise.all([
+        Product.countDocuments(currentQuery),
+        getFilterFacets(currentQuery),
+        getPriceRange(currentQuery),
+        getBrandsWithSelection(baseQueryWithoutBrand, null, selectedBrands)
+      ]);
 
-    const allBrandsWithCounts = await Product.aggregate([
-      { $match: { ...baseQueryWithoutBrand, isAvailable: true } },
-      // Group by brand and count
-      {
-        $group: {
-          _id: '$brand',
-          count: { $sum: 1 }
-        }
-      },
-      // Sort by count descending
-      { $sort: { count: -1 } },
-      // Filter out null brands
-      { $match: { _id: { $ne: null } } }
-    ]).option({
-      maxTimeMS: 15000,
-      allowDiskUse: true
-    });
+      response = buildResponseData(
+        filterResults[0], filterParams, sort, currentResultCount, brandsWithSelection, priceStats
+      );
+    }
 
-    const result = filterResults[0];
-    const priceRange = priceStats[0] || { minPrice: 0, maxPrice: 1000 };
-
-    const selectedBrands = filterParams.brand ?
-      filterParams.brand.split(',').map(b => b.trim()) : [];
-
-    const brandsWithSelection = allBrandsWithCounts.map(brand => ({
-      value: brand._id,
-      count: brand.count,
-      selected: selectedBrands.includes(brand._id)
-    }));
-    const response = {
-      success: true,
-      data: {
-        currentResultCount,
-        appliedFilters: filterParams,  // Use filterParams instead of req.query
-        categories: processResults(result.categories),
-        collections: processResults(result.collections),
-        tags: filterParams.tags ? filterParams.tags.split(',').map(tag => ({
-          value: tag.trim(),
-          count: currentResultCount
-        })) : [],
-        attributes: {
-          colors: processResults(result.colors),
-          sizes: processResults(result.sizes),
-          materials: processResults(result.materials),
-          seasons: processResults(result.seasons),
-          genders: processResults(result.genders),
-          fabrics: processResults(result.fabrics),
-          works: processResults(result.works)
-        },
-        productGroups: processResults(result.productGroups),
-        productTypes: processResults(result.productTypes),
-        brands: brandsWithSelection,
-        priceRange: {
-          min: Math.floor(priceRange.minPrice),
-          max: Math.ceil(priceRange.maxPrice),
-          appliedMin: filterParams.minPrice ? parseFloat(filterParams.minPrice) : undefined,
-          appliedMax: filterParams.maxPrice ? parseFloat(filterParams.maxPrice) : undefined
-        }
-      }
-    };
-
-    // Store in cache
     filterCache.set(cacheKey, response);
-    console.log('Total response time:', Date.now() - startTime, 'ms');
-    res.json(response);
+    return res.json(response);
 
   } catch (error) {
     console.error('Error fetching product filters:', error);
-    console.error('Error occurred after:', Date.now() - startTime, 'ms');
     res.status(500).json({
       success: false,
       error: 'Failed to fetch product filters',
