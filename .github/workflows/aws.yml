@@ -42,7 +42,7 @@ jobs:
           script: |
             set -e
 
-            APP_NAME="my-app"
+            APP_NAME="Products-serch"
             LIVE_DIR="/var/www/html/Node/$APP_NAME"
             TEMP_DIR="/tmp/deploy-$APP_NAME"
             ARCHIVE="/home/${{ secrets.EC2_USER }}/app.zip"
