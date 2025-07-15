@@ -161,6 +161,10 @@ export const buildSharedQuery = async (queryParams) => {
 
   query.collections = {
     $in: collectionArray.map(keyword => {
+
+      if('all-lehengas'==keyword) return "All Lehenga's"
+      else {
+
       const normalized = keyword
         .replaceAll('-', ' ')       // "all-lehengas" → "all lehengas"
         .replace(/'s$/i, '')        // remove trailing 's
@@ -169,6 +173,7 @@ export const buildSharedQuery = async (queryParams) => {
         .toLowerCase();
 
       return new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+      }
     })
   };
 }
