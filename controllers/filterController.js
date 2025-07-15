@@ -39,7 +39,11 @@ const generateFilterCacheKey = (filters) => {
  */
 const normalizeValue = (value) => {
   if (!value) return '';
-  return value.toString().toLowerCase().trim().replace(/\s+/g, ' ');
+  return value.toString().toLowerCase().trim()
+    .replace(/['’]s/g, '') // remove possessive 's
+    .replace(/s\b/g, '')  // remove trailing 's'
+    .replace(/-/g, ' ')    // replace hyphens with space
+    .replace(/\s+/g, ' ');
 };
 
 /**
