@@ -352,24 +352,10 @@ const getProducts = async (req, res) => {
       Product.countDocuments(query)
     ]);
 
-    // Fetch sales data for products in this page
-    const productIds = products.map(p => p.productId);
-    const salesData = await Order.aggregate([
-      { $match: { product_id: { $in: productIds } } },
-      { $group: { _id: '$product_id', totalSaleQty: { $sum: '$quantity' } } }
-    ]);
-    const salesDataMap = new Map(salesData.map(item => [item._id, item.totalSaleQty]));
-
-    const productsWithSaleQty = products.map(product => ({
-      ...product,
-      totalSaleQty: salesDataMap.get(product.productId) || 0,
-      productUrl: product.productUrl
-    }));
-
     const response = {
       success: true,
       data: {
-        products: productsWithSaleQty,
+        products: products,
         pagination: {
           total,
           page: pageNum,
