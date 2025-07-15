@@ -126,9 +126,11 @@ const processResults = (items) => {
 const createFacetPipeline = (field, isAttribute = false) => {
   const path = isAttribute ? `attributes.${field}` : field;
   return [
+    { $match: { [path]: { $exists: true, $ne: null, $not: { $size: 0 } } } },
     { $unwind: { path: `$${path}`, preserveNullAndEmptyArrays: false } },
     { $group: { _id: `$${path}`, count: { $sum: 1 } } },
-    { $sort: { count: -1 } }
+    { $sort: { count: -1 } },
+    { $limit: 300 }
   ];
 };
 
@@ -165,7 +167,7 @@ async function getFilterFacets(query) {
     const result = await Product.aggregate([
       { $match: query },
       { $facet: facetStage }
-    ]).option({ maxTimeMS: 60000, allowDiskUse: true });
+    ]).option({ maxTimeMS: 15000, allowDiskUse: true, hint: { isAvailable: 1 } })
 
     return result[0] || {};
   } catch (error) {
