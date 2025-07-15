@@ -26,12 +26,19 @@ const productCache = new AdvancedCache({
  * @param {string|Array} values - Filter values to convert to patterns
  * @returns {Array} Array of RegExp objects for MongoDB queries
  */
+// const createCaseInsensitivePatterns = (values) => {
+//   if (typeof values === 'string') {
+//     values = values.split(',').map(v => v.trim());
+//   }
+//   const valueArray = Array.isArray(values) ? values : [values];
+//   return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
+// };
 const createCaseInsensitivePatterns = (values) => {
+  if (!values) return undefined;
   if (typeof values === 'string') {
     values = values.split(',').map(v => v.trim());
   }
-  const valueArray = Array.isArray(values) ? values : [values];
-  return valueArray.map(value => new RegExp(`^${value}$`, 'i'));
+  return Array.isArray(values) ? values : [values];
 };
 
 const createCaseInsensitivePatternsCollentions = (values) => {
