@@ -48,6 +48,7 @@ const normalizeValue = (value) => {
   // Standard normalization - always return a string
   const normalized = value
     .toString()
+    .replaceAll('-', ' ')   
     .replace(/-/g, ' ')         // "all-lehengas" → "all lehengas"
     .replace(/'s$/i, '')        // remove trailing 's
     .replace(/s$/i, '')         // remove plural s
