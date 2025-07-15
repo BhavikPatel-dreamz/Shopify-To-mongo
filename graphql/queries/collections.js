@@ -29,3 +29,48 @@ export const collectionsQuery = `
   }
 }
 `;
+
+
+ export const collectionProductsQuery = `
+  query CollectionProducts($handle: String!, $cursor: String) {
+    collectionByHandle(handle: $handle) {
+      id
+      title
+      handle
+      products(first: 50, after: $cursor) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          node {
+            id
+            title
+            handle
+            description
+            variants(first: 10) {
+              edges {
+                node {
+                  id
+                  title
+                  price
+                  sku
+                }
+              }
+            }
+            images(first: 5) {
+              edges {
+                node {
+                  url
+                  altText
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+

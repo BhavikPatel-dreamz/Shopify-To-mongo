@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import connectDB from '../config/database.js';
 import { shopifyClient } from '../config/shopify.js';
-import { collectionsQuery } from '../graphql/queries/collections.js';
+import { collectionProductsQuery, collectionsQuery } from '../graphql/queries/collections.js';
 import processBatch from './products/processBatch.js';
 import MigrationState from '../models/MigrationState.js';
 import Collection from '../models/Collection.js';
+import { productsQuery } from '../graphql/queries/products.js';
 
 
 // Initialize MongoDB connection
@@ -44,41 +45,47 @@ async function migrateCollectionProducts(collectionHandle = '') {
   let hasNextPage = true;
   let cursor = await getLastCollectionCursor();
   let totalProcessed = 0;
-  
+  console.log(cursor)
+  const updatedAtQuery = `collection:handle:"${collectionHandle}"`;
+  console.log(updatedAtQuery)
+
+
   while (hasNextPage) {
     try {
+  
       // Query collection products with pagination
-      const data = await shopifyClient.query(collectionsQuery, { 
-        cursor,
-        handle: collectionHandle
-      });
+
+
+      const data = await shopifyClient.query(collectionProductsQuery, { cursor,updatedAtQuery });
+
+      console.log("data",data);
 
       // Extract collection data
-      const collection = data.collectionByHandle;
-      if (!collection) {
-        console.error(`Collection not found: ${collectionHandle}`);
-        break;
-      }
+      // const collection = data.collectionByHandle;
+      // if (!collection) {
+      //   console.error(`Collection not found: ${collectionHandle}`);
+      //   break;
+      // }
 
-      // Process products from the collection
-      const products = collection.products.edges.map(edge => edge.node);
-      console.log(`\nProcessing ${products.length} products from collection: ${collection.title}`);
+      // // Process products from the collection
+      // const products = collection.products.edges.map(edge => edge.node);
+      // console.log(`\nProcessing ${products.length} products from collection: ${collection.title}`);
       
-      const success = await processBatch(products);
-      if (success) {
-        totalProcessed += products.length;
-        console.log(`Successfully processed ${totalProcessed} products total`);
-      }
+      // const success = await processBatch(products);
+      // if (success) {
+      //   totalProcessed += products.length;
+      //   console.log(`Successfully processed ${totalProcessed} products total`);
+      // }
 
-      // Update pagination info
-      hasNextPage = collection.products.pageInfo.hasNextPage;
-      cursor = collection.products.pageInfo.endCursor;
+      // // Update pagination info
+      // hasNextPage = collection.products.pageInfo.hasNextPage;
+      // cursor = collection.products.pageInfo.endCursor;
 
-      // Update migration state
-      await updateMigrationState(cursor, { handle: collectionHandle }, totalProcessed);
+      // // Update migration state
+      // await updateMigrationState(cursor, { handle: collectionHandle }, totalProcessed);
 
-      // Add delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // // Add delay to avoid rate limiting
+      // await new Promise(resolve => setTimeout(resolve, 1000));
 
     } catch (error) {
       console.error('Error during migration:', error);
@@ -109,5 +116,6 @@ async function migrateAllCollections() {
 
 }
 
-await migrateAllCollections();
+await migrateCollectionProducts('all-lehengas')
+//await migrateAllCollections();
 
