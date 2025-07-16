@@ -525,51 +525,51 @@ export const getProductSalesStats = async (req, res) => {
 };
 
 // Updated getBestSellingProducts function for external use
-async function getBestSellingProducts(limit = 10, matchParams = {}) {
-  const bestSellers = await Order.aggregate([
-    // Optional: Filter by extra conditions (like date range)
-    { $match: matchParams },
+// async function getBestSellingProductsExtranal(limit = 10, matchParams = {}) {
+//   const bestSellers = await Order.aggregate([
+//     // Optional: Filter by extra conditions (like date range)
+//     { $match: matchParams },
 
-    // Group by product_id and sum the quantity
-    {
-      $group: {
-        _id: '$product_id',
-        totalSold: { $sum: '$quantity' },
-      },
-    },
+//     // Group by product_id and sum the quantity
+//     {
+//       $group: {
+//         _id: '$product_id',
+//         totalSold: { $sum: '$quantity' },
+//       },
+//     },
 
-    // Sort by total quantity sold, descending
-    { $sort: { totalSold: -1 } },
+//     // Sort by total quantity sold, descending
+//     { $sort: { totalSold: -1 } },
 
-    // Limit results
-    { $limit: limit },
+//     // Limit results
+//     { $limit: limit },
 
-    // Lookup product details from Product collection
-    {
-      $lookup: {
-        from: 'products',               // must match actual collection name
-        localField: '_id',              // product_id in order collection
-        foreignField: 'productId',      // productId in product collection
-        as: 'product',
-      },
-    },
+//     // Lookup product details from Product collection
+//     {
+//       $lookup: {
+//         from: 'products',               // must match actual collection name
+//         localField: '_id',              // product_id in order collection
+//         foreignField: 'productId',      // productId in product collection
+//         as: 'product',
+//       },
+//     },
 
-    // Unwind product array to object
-    { $unwind: '$product' },
+//     // Unwind product array to object
+//     { $unwind: '$product' },
 
-    // Project the final output
-    {
-      $project: {
-        _id: 0,
-        productId: '$_id',
-        totalSold: 1,
-        product: 1,
-      },
-    },
-  ]);
+//     // Project the final output
+//     {
+//       $project: {
+//         _id: 0,
+//         productId: '$_id',
+//         totalSold: 1,
+//         product: 1,
+//       },
+//     },
+//   ]);
 
-  return bestSellers;
-}
+//   return bestSellers;
+// }
 
 export default {
   getProducts,
