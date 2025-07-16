@@ -152,8 +152,7 @@ export const buildSharedQuery = async (queryParams) => {
 
     query.collections = {
       $in: collectionArray.map(keyword => {
-        // if ('all-lehengas' === keyword) return "All Lehenga's";
-        // else {
+       keyword= keyword.replace(/\b(?!\$)(\d+)\b/g, '$$$1');
           const normalized = keyword
             .replaceAll('-', ' ')       // "all-lehengas" → "all lehengas"
             .replace(/'s$/i, '')        // remove trailing 's

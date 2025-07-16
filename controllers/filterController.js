@@ -48,12 +48,12 @@ const normalizeValue = (value) => {
   // Standard normalization - always return a string
   const normalized = value
     .toString()
-    .replaceAll('-', ' ')   
-    .replace(/-/g, ' ')         // "all-lehengas" → "all lehengas"
-    .replace(/'s$/i, '')        // remove trailing 's
-    .replace(/s$/i, '')         // remove plural s
+    .replace(/-/g, ' ')          // Replace all hyphens with spaces
+    .replace(/'s$/i, '')         // Remove trailing 's
+    .replace(/s$/i, '')          // Remove plural s
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\b(?!\$)(\d+)\b/g, '$$$1');  // Add $ sign before numbers only if not already present
 
   return normalized;
 };
@@ -63,10 +63,10 @@ const normalizeValue = (value) => {
  */
 const createNormalizedRegex = (value) => {
   if (!value) return null;
-  
+
   const normalized = normalizeValue(value);
   if (!normalized) return null;
-  
+
   // Escape special regex characters
   const escapedValue = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`^${escapedValue}`, 'i');
@@ -78,7 +78,7 @@ const createNormalizedRegex = (value) => {
  */
 const processResults = (items) => {
   if (!Array.isArray(items)) return [];
-  
+
   // First, normalize and merge counts for same values
   const mergedCounts = items.reduce((acc, item) => {
     if (!item._id) return acc;
@@ -305,10 +305,10 @@ const getProductFilters = async (req, res) => {
       if (!products.length) {
         response = buildResponseData(
           {}, // Empty result object
-          filterParams, 
-          sort, 
-          0, 
-          [], 
+          filterParams,
+          sort,
+          0,
+          [],
           { minPrice: 0, maxPrice: 1000 }
         );
       } else {
@@ -320,11 +320,11 @@ const getProductFilters = async (req, res) => {
         ]);
 
         response = buildResponseData(
-          filterResults, 
-          filterParams, 
-          sort, 
-          productIds.length, 
-          brandsWithSelection, 
+          filterResults,
+          filterParams,
+          sort,
+          productIds.length,
+          brandsWithSelection,
           priceStats
         );
       }
@@ -337,11 +337,11 @@ const getProductFilters = async (req, res) => {
       ]);
 
       response = buildResponseData(
-        filterResults, 
-        filterParams, 
-        sort, 
-        currentResultCount, 
-        brandsWithSelection, 
+        filterResults,
+        filterParams,
+        sort,
+        currentResultCount,
+        brandsWithSelection,
         priceStats
       );
     }
