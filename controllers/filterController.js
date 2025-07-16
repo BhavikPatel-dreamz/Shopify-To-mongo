@@ -41,9 +41,9 @@ const normalizeValue = (value) => {
   if (!value) return '';
   
   // Handle special case for 'all-lehengas'
-  if (value === 'all-lehengas') {
-    return "all lehenga's";
-  }
+  // if (value === 'all-lehengas') {
+  //   return "all lehenga's";
+  // }
   
   // Standard normalization - always return a string
   const normalized = value

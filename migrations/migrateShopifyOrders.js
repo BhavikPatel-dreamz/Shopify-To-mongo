@@ -47,6 +47,10 @@ async function syncShopifyOrders() {
   let hasNextPage = true;
   let cursor = await getLastCursor();
   let totalProcessed = 0;
+  // migration code for orders
+  //  const sixMonthsAgo = new Date();
+  // sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  // const createdAtQuery = `created_at:>=${sixMonthsAgo.toISOString().split('T')[0]}`;
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const createdAtQuery = `created_at:>=${yesterday.toISOString().split('T')[0]}`; // YYYY-MM-DD 
@@ -118,6 +122,11 @@ async function syncShopifyOrders() {
   console.log(`Shopify order sync complete. Total processed: ${totalProcessed}`);
 }
 
+// Run migration
+// syncShopifyOrders().catch(error => {
+//   console.error('Migration failed:', error);
+//   process.exit(1);
+// }); 
 
 //Run daily at midnight
 export const startOrderAddedJob = () => {
