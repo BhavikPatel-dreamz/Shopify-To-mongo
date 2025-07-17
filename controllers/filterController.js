@@ -125,6 +125,7 @@ const processResults = (items) => {
 // Optimized aggregation pipelines
 const createFacetPipeline = (field, isAttribute = false) => {
   const path = isAttribute ? `attributes.${field}` : field;
+
   return [
     { $match: { [path]: { $exists: true, $ne: null, $not: { $size: 0 } } } },
     { $unwind: { path: `$${path}`, preserveNullAndEmptyArrays: false } },
@@ -145,7 +146,7 @@ async function getFilterFacets(query) {
     const facetStage = {
       categories: createFacetPipeline('categories'),
       collections: createFacetPipeline('collections'),
-      colors: createFacetPipeline('color', true),
+      color: createFacetPipeline('color', true),
       sizes: createFacetPipeline('size', true),
       materials: createFacetPipeline('material', true),
       seasons: createFacetPipeline('season', true),
@@ -290,12 +291,60 @@ const getProductFilters = async (req, res) => {
     }
 
     console.log('Cache miss - Building new response');
+
+    // Build full filter query (all filters applied) - for result count
     const currentQuery = await buildSharedQuery(filterParams);
+
+    // Modified: Create individual facet queries by excluding only the specific filter being calculated
+    const createFacetQueryFor = (excludeFilter) => {
+      const facetQuery = { ...currentQuery };
+
+      // Remove the specific filter we're calculating facets for
+      switch (excludeFilter) {
+        case 'brand':
+          delete facetQuery.brand;
+          break;
+        case 'color':
+          delete facetQuery['attributes.color'];
+          break;
+        case 'size':
+          delete facetQuery['attributes.size'];
+          break;
+        case 'material':
+          delete facetQuery['attributes.material'];
+          break;
+        case 'season':
+          delete facetQuery['attributes.season'];
+          break;
+        case 'gender':
+          return { isAvailable: true }; 
+        case 'fabric':
+          delete facetQuery['attributes.fabric'];
+          break;
+        case 'work':
+          delete facetQuery['attributes.work'];
+          break;
+        case 'productGroup':
+          delete facetQuery.productGroup;
+          break;
+        case 'productType':
+          delete facetQuery.productType;
+          break;
+        case 'categories':
+          delete facetQuery.categories;
+          break;
+        case 'collections':
+          delete facetQuery.collections;
+          break;
+      }
+
+      return facetQuery;
+    };
+
+    // Track pattern
     queryPatternTracker.trackQuery(currentQuery);
 
     const selectedBrands = filterParams.brand ? filterParams.brand.split(',').map(b => b.trim()) : [];
-    const baseQueryWithoutBrand = { ...currentQuery };
-    delete baseQueryWithoutBrand.brand;
 
     let response;
 
@@ -304,7 +353,7 @@ const getProductFilters = async (req, res) => {
 
       if (!products.length) {
         response = buildResponseData(
-          {}, // Empty result object
+          {},
           filterParams,
           sort,
           0,
@@ -312,36 +361,231 @@ const getProductFilters = async (req, res) => {
           { minPrice: 0, maxPrice: 1000 }
         );
       } else {
-        const bestSellerQuery = { productId: { $in: productIds } };
-        const [filterResults, priceStats, brandsWithSelection] = await Promise.all([
-          getFilterFacets(bestSellerQuery),
-          getPriceRange(bestSellerQuery),
-          getBrandsWithSelection(baseQueryWithoutBrand, productIds, selectedBrands)
+        // Modified: Best seller facet query creation
+        const createBestSellerFacetQueryFor = async (excludeFilter) => {
+         
+          if (excludeFilter === 'gender') {
+            return { isAvailable: true }; 
+          }
+          const facetQuery = { productId: { $in: productIds }, isAvailable: true };
+          const fullQuery = { ...currentQuery };
+
+          // Remove the specific filter from the original query
+          switch (excludeFilter) {
+            case 'brand':
+              delete fullQuery.brand;
+              break;
+            case 'color':
+              delete fullQuery['attributes.color'];
+              break;
+            case 'size':
+              delete fullQuery['attributes.size'];
+              break;
+            case 'material':
+              delete fullQuery['attributes.material'];
+              break;
+            case 'season':
+              delete fullQuery['attributes.season'];
+              break;
+            case 'fabric':
+              delete fullQuery['attributes.fabric'];
+              break;
+            case 'work':
+              delete fullQuery['attributes.work'];
+              break;
+            case 'productGroup':
+              delete fullQuery.productGroup;
+              break;
+            case 'productType':
+              delete fullQuery.productType;
+              break;
+            case 'categories':
+              delete fullQuery.categories;
+              break;
+            case 'collections':
+              delete fullQuery.collections;
+              break;
+          }
+
+          // Get products that match the modified query (without the excluded filter)
+          const matchedProducts = await Product.find(fullQuery).select('productId').lean();
+          
+          return {
+            productId: { $in: matchedProducts.map(p => p.productId) },
+            isAvailable: true
+          };
+        };
+
+        const [
+          brandQuery,
+          colorQuery,
+          sizeQuery,
+          materialQuery,
+          seasonQuery,
+          genderQuery, 
+          fabricQuery,
+          workQuery,
+          productGroupQuery,
+          productTypeQuery,
+          categoriesQuery,
+          collectionsQuery
+        ] = await Promise.all([
+          createBestSellerFacetQueryFor('brand'),
+          createBestSellerFacetQueryFor('color'),
+          createBestSellerFacetQueryFor('size'),
+          createBestSellerFacetQueryFor('material'),
+          createBestSellerFacetQueryFor('season'),
+          createBestSellerFacetQueryFor('gender'),
+          createBestSellerFacetQueryFor('fabric'),
+          createBestSellerFacetQueryFor('work'),
+          createBestSellerFacetQueryFor('productGroup'),
+          createBestSellerFacetQueryFor('productType'),
+          createBestSellerFacetQueryFor('categories'),
+          createBestSellerFacetQueryFor('collections')
         ]);
+
+        
+        const [
+          brands,
+          colors,
+          sizes,
+          materials,
+          seasons,
+          genders, 
+          fabrics,
+          works,
+          productGroups,
+          productTypes,
+          categories,
+          collections,
+          priceStats
+        ] = await Promise.all([
+          getBrandsWithSelection(brandQuery, null, selectedBrands),
+          Product.aggregate([{ $match: colorQuery }, ...createFacetPipeline('color', true)]).catch(err => {
+            console.error('Color aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: sizeQuery }, ...createFacetPipeline('size', true)]).catch(err => {
+            console.error('Size aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: materialQuery }, ...createFacetPipeline('material', true)]).catch(err => {
+            console.error('Material aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: seasonQuery }, ...createFacetPipeline('season', true)]).catch(err => {
+            console.error('Season aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: genderQuery }, ...createFacetPipeline('gender', true)]).catch(err => {
+            console.error('Gender aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: fabricQuery }, ...createFacetPipeline('fabric', true)]).catch(err => {
+            console.error('Fabric aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: workQuery }, ...createFacetPipeline('work', true)]).catch(err => {
+            console.error('Work aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: productGroupQuery }, ...createSimpleFacetPipeline('productGroup')]).catch(err => {
+            console.error('ProductGroup aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: productTypeQuery }, ...createSimpleFacetPipeline('productType')]).catch(err => {
+            console.error('ProductType aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: categoriesQuery }, ...createFacetPipeline('categories')]).catch(err => {
+            console.error('Categories aggregation error:', err);
+            return [];
+          }),
+          Product.aggregate([{ $match: collectionsQuery }, ...createFacetPipeline('collections')]).catch(err => {
+            console.error('Collections aggregation error:', err);
+            return [];
+          }),
+          getPriceRange(bestSellerQuery)
+        ]);
+
+        const filterResults = {
+          categories,
+          collections,
+          colors,
+          sizes,
+          materials,
+          seasons,
+          genders,
+          fabrics,
+          works,
+          productGroups,
+          productTypes
+        };
 
         response = buildResponseData(
           filterResults,
           filterParams,
           sort,
           productIds.length,
-          brandsWithSelection,
+          brands,
           priceStats
         );
       }
+
     } else {
-      const [currentResultCount, filterResults, priceStats, brandsWithSelection] = await Promise.all([
+     
+      const [
+        currentResultCount,
+        brands,
+        colors,
+        sizes,
+        materials,
+        seasons,
+        genders, 
+        fabrics,
+        works,
+        productGroups,
+        productTypes,
+        categories,
+        collections,
+        priceStats
+      ] = await Promise.all([
         Product.countDocuments(currentQuery),
-        getFilterFacets(currentQuery),
-        getPriceRange(currentQuery),
-        getBrandsWithSelection(baseQueryWithoutBrand, null, selectedBrands)
+        getBrandsWithSelection(createFacetQueryFor('brand'), null, selectedBrands),
+        Product.aggregate([{ $match: createFacetQueryFor('color') }, ...createFacetPipeline('color', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('size') }, ...createFacetPipeline('size', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('material') }, ...createFacetPipeline('material', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('season') }, ...createFacetPipeline('season', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('gender') }, ...createFacetPipeline('gender', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('fabric') }, ...createFacetPipeline('fabric', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('work') }, ...createFacetPipeline('work', true)]),
+        Product.aggregate([{ $match: createFacetQueryFor('productGroup') }, ...createSimpleFacetPipeline('productGroup')]),
+        Product.aggregate([{ $match: createFacetQueryFor('productType') }, ...createSimpleFacetPipeline('productType')]),
+        Product.aggregate([{ $match: createFacetQueryFor('categories') }, ...createFacetPipeline('categories')]),
+        Product.aggregate([{ $match: createFacetQueryFor('collections') }, ...createFacetPipeline('collections')]),
+        getPriceRange(createFacetQueryFor('price'))
       ]);
+
+      const filterResults = {
+        categories,
+        collections,
+        colors,
+        sizes,
+        materials,
+        seasons,
+        genders, 
+        fabrics,
+        works,
+        productGroups,
+        productTypes
+      };
 
       response = buildResponseData(
         filterResults,
         filterParams,
         sort,
         currentResultCount,
-        brandsWithSelection,
+        brands,
         priceStats
       );
     }
@@ -358,7 +602,6 @@ const getProductFilters = async (req, res) => {
     });
   }
 };
-
 export default {
   getProductFilters
 };
