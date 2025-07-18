@@ -149,19 +149,33 @@ export const buildSharedQuery = async (queryParams) => {
     collections.toLowerCase() !== 'all'
   ) {
     const collectionArray = collections.split(',').map(c => c.trim());
+    const specialCases = {
+      'wedding-lehengas': 'Wedding Lehengas',
+      'all-lehengas': 'All Lehenga\'s',
+    };
 
     query.collections = {
       $in: collectionArray.map(keyword => {
-       keyword= keyword.replace(/\b(?!\$)(\d+)\b/g, '$$$1');
-          const normalized = keyword
-            .replaceAll('-', ' ')       // "all-lehengas" → "all lehengas"
-            .replace(/'s$/i, '')        // remove trailing 's
-            .replace(/s$/i, '')         // remove plural s
-            .trim()
-            .toLowerCase();
+        keyword = keyword.replace(/\b(?!\$)(\d+)\b/g, '$$$1');
 
-          return new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
-        // }
+        // Check if there's a special case first
+        if (specialCases[keyword]) {
+          return specialCases[keyword];
+        }
+
+        // Otherwise, use dynamic regex transformation
+        const normalized = keyword
+          .replaceAll('-', ' ')
+          .replace(/\b\w/g, l => l.toUpperCase())
+          .trim();
+
+        // Create flexible regex pattern
+        const regexPattern = normalized
+          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          .replace(/\s+/g, '\\s*')  // flexible spacing
+          .replace(/s$/i, 's?');    // optional plural
+
+        return new RegExp(`^${regexPattern}$`, 'i');
       })
     };
   }
