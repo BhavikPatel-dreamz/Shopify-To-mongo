@@ -39,12 +39,7 @@ const generateFilterCacheKey = (filters) => {
  */
 const normalizeValue = (value) => {
   if (!value) return '';
-  
-  // Handle special case for 'all-lehengas'
-  // if (value === 'all-lehengas') {
-  //   return "all lehenga's";
-  // }
-  
+
   // Standard normalization - always return a string
   const normalized = value
     .toString()
@@ -54,7 +49,6 @@ const normalizeValue = (value) => {
     .trim()
     .toLowerCase()
     .replace(/\b(?!\$)(\d+)\b/g, '$$$1');  // Add $ sign before numbers only if not already present
-
   return normalized;
 };
 
@@ -141,42 +135,6 @@ const createSimpleFacetPipeline = (field) => [
   { $sort: { count: -1 } }
 ];
 
-async function getFilterFacets(query) {
-  try {
-    const facetStage = {
-      categories: createFacetPipeline('categories'),
-      collections: createFacetPipeline('collections'),
-      color: createFacetPipeline('color', true),
-      sizes: createFacetPipeline('size', true),
-      materials: createFacetPipeline('material', true),
-      seasons: createFacetPipeline('season', true),
-      genders: createFacetPipeline('gender', true),
-      fabrics: createFacetPipeline('fabric', true),
-      works: createFacetPipeline('work', true),
-      productGroups: createSimpleFacetPipeline('productGroup'),
-      productTypes: createSimpleFacetPipeline('productType'),
-      brands: createSimpleFacetPipeline('brand'),
-      priceRange: [{
-        $group: {
-          _id: null,
-          minPrice: { $min: '$price' },
-          maxPrice: { $max: '$price' }
-        }
-      }]
-    };
-
-    const result = await Product.aggregate([
-      { $match: query },
-      { $facet: facetStage }
-    ]).option({ maxTimeMS: 15000, allowDiskUse: true, hint: { isAvailable: 1 } })
-
-    return result[0] || {};
-  } catch (error) {
-    console.error('Error in getFilterFacets:', error);
-    throw error;
-  }
-}
-
 // Utility functions
 
 const getCollectionPriceRange = async (query, collectionName = null) => {
@@ -207,21 +165,20 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
   }
 };
 
-
-
 const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) => {
   try {
     const matchStage = { ...baseQuery, isAvailable: true };
-    if (bestSellerIds) {
+    if (bestSellerIds && bestSellerIds.length > 0) {
       matchStage.productId = { $in: bestSellerIds };
     }
 
-    // બધા available brands get કરો (selected brands filter કર્યા વિના)
+    console.log('Brand aggregation match stage:', JSON.stringify(matchStage, null, 2));
+
     const allBrands = await Product.aggregate([
       { $match: matchStage },
       { $group: { _id: '$brand', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $match: { _id: { $ne: null, $exists: true } } }
+      { $match: { _id: { $ne: null, $ne: '', $exists: true } } }, // Fix: Also exclude empty strings
+      { $sort: { count: -1 } }
     ]).option({ maxTimeMS: 15000, allowDiskUse: true });
 
     return allBrands.map(b => ({
@@ -235,7 +192,6 @@ const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) 
     return [];
   }
 };
-// Optimized best seller logic
 const getBestSellerProducts = async (query) => {
   try {
     const products = await Product.find(query).lean();
@@ -297,252 +253,131 @@ const buildResponseData = (result, filterParams, sort, currentResultCount, brand
   }
 });
 
-
 const getProductFilters = async (req, res) => {
   try {
-    const { page, limit, sort, order, ...filterParams } = req.query;
+    const { sort, ...filterParams } = req.query;
     const cacheKey = generateFilterCacheKey({ ...filterParams, sort });
 
-    // Check cache
     const cached = filterCache.get(cacheKey);
-    if (cached && filterCache.isValid(cacheKey)) {
-      return res.json(cached);
-    }
+    if (cached && filterCache.isValid(cacheKey)) return res.json(cached);
 
     console.log('Cache miss - Building new response');
-
     const currentQuery = await buildSharedQuery(filterParams);
+    const selectedBrands = filterParams.brand?.split(',').map(b => b.trim()) || [];
+
+    const attributeMap = {
+      brand: 'brand',
+      color: 'attributes.color',
+      size: 'attributes.size',
+      material: 'attributes.material',
+      season: 'attributes.season',
+      gender: 'attributes.gender',
+      fabric: 'attributes.fabric',
+      work: 'attributes.work',
+      productGroup: 'productGroup',
+      productType: 'productType',
+      categories: 'categories',
+      collections: 'collections'
+    };
 
     const getAvailableGendersForCollection = async (collections) => {
       const collectionsArray = collections.split(',').map(c => c.trim());
-
       const pipeline = [
         { $match: { collections: { $in: collectionsArray }, isAvailable: true } },
         { $group: { _id: '$attributes.gender', count: { $sum: 1 } } },
         { $match: { _id: { $ne: null } } },
         { $sort: { count: -1 } }
       ];
-
       const result = await Product.aggregate(pipeline);
       return result.map(item => item._id);
     };
 
-    const createFacetQueryFor = async (excludeFilter) => {
-      const facetQuery = { ...currentQuery };
-
-      switch (excludeFilter) {
-        case 'brand': delete facetQuery.brand; break;
-        case 'color': delete facetQuery['attributes.color']; break;
-        case 'size': delete facetQuery['attributes.size']; break;
-        case 'material': delete facetQuery['attributes.material']; break;
-        case 'season': delete facetQuery['attributes.season']; break;
-        case 'gender':
-          delete facetQuery['attributes.gender'];
-          if (filterParams.collections) {
-            try {
-              const allowedGenders = await getAvailableGendersForCollection(filterParams.collections);
-              if (allowedGenders.length > 0) {
-                facetQuery['attributes.gender'] = { $in: allowedGenders };
-              }
-            } catch (error) {
-              console.error('Error getting collection genders:', error);
-            }
-          }
-          break;
-        case 'fabric': delete facetQuery['attributes.fabric']; break;
-        case 'work': delete facetQuery['attributes.work']; break;
-        case 'productGroup': delete facetQuery.productGroup; break;
-        case 'productType': delete facetQuery.productType; break;
-        case 'categories': delete facetQuery.categories; break;
-        case 'collections': delete facetQuery.collections; break;
+    const buildFacetQuery = async (exclude) => {
+      const query = { ...currentQuery };
+      delete query[attributeMap[exclude]];
+      if (exclude === 'gender' && filterParams.collections) {
+        try {
+          const genders = await getAvailableGendersForCollection(filterParams.collections);
+          if (genders.length) query['attributes.gender'] = { $in: genders };
+        } catch (e) {
+          console.error('Gender collection fetch error:', e);
+        }
       }
+      return query;
+    };
 
-      return facetQuery;
+    const buildFacet = async (query, field, isMulti = true) => {
+      const pipeline = isMulti ? createFacetPipeline(field, true) : createSimpleFacetPipeline(field);
+      return Product.aggregate([{ $match: query }, ...pipeline]);
+    };
+
+    const getCommonFacets = async () => {
+      const filters = Object.keys(attributeMap);
+      const facetQueries = await Promise.all(filters.map(f => buildFacetQuery(f)));
+
+      const [
+        brands,
+        ...facets
+      ] = await Promise.all([
+        getBrandsWithSelection(facetQueries[0], null, selectedBrands),
+        ...filters.slice(1).map((f, i) =>
+          buildFacet(facetQueries[i + 1], f, !['productGroup', 'productType'].includes(f))
+        ),
+        getCollectionPriceRange(await buildFacetQuery('price'), filterParams.collections)
+      ]);
+
+      const [
+        colors, sizes, materials, seasons, genders, fabrics,
+        works, productGroups, productTypes, categories, collections,
+        priceStats
+      ] = facets;
+
+      return {
+        brands, priceStats, filterResults: {
+          categories, collections, colors, sizes, materials, seasons,
+          genders, fabrics, works, productGroups, productTypes
+        }
+      };
     };
 
     queryPatternTracker.trackQuery(currentQuery);
-
-    const selectedBrands = filterParams.brand ? filterParams.brand.split(',').map(b => b.trim()) : [];
-
     let response;
 
     if (sort === 'best_seller') {
       const { products, productIds, bestSellerQuery } = await getBestSellerProducts(currentQuery);
-
       if (!products.length) {
-        response = buildResponseData(
-          {},
-          filterParams,
-          sort,
-          0,
-          [],
-          { minPrice: 0, maxPrice: 1000 }
-        );
+        response = buildResponseData({}, filterParams, sort, 0, [], { minPrice: 0, maxPrice: 1000 });
       } else {
-        const createBestSellerFacetQueryFor = async (excludeFilter) => {
-          const fullQuery = { ...currentQuery };
+        const filters = Object.keys(attributeMap);
+        const queries = await Promise.all(filters.map(async (f) => {
+          const base = await buildFacetQuery(f);
+          const matched = await Product.find(base).select('productId').lean();
+          return { filter: f, match: { productId: { $in: matched.map(p => p.productId) }, isAvailable: true } };
+        }));
 
-          if (excludeFilter === 'gender') {
-            delete fullQuery['attributes.gender'];
-            if (filterParams.collections) {
-              try {
-                const allowedGenders = await getAvailableGendersForCollection(filterParams.collections);
-                if (allowedGenders.length > 0) {
-                  fullQuery['attributes.gender'] = { $in: allowedGenders };
-                }
-              } catch (error) {
-                console.error('Error getting collection genders for best seller:', error);
-              }
-            }
-          } else {
-            switch (excludeFilter) {
-              case 'brand': delete fullQuery.brand; break;
-              case 'color': delete fullQuery['attributes.color']; break;
-              case 'size': delete fullQuery['attributes.size']; break;
-              case 'material': delete fullQuery['attributes.material']; break;
-              case 'season': delete fullQuery['attributes.season']; break;
-              case 'fabric': delete fullQuery['attributes.fabric']; break;
-              case 'work': delete fullQuery['attributes.work']; break;
-              case 'productGroup': delete fullQuery.productGroup; break;
-              case 'productType': delete fullQuery.productType; break;
-              case 'categories': delete fullQuery.categories; break;
-              case 'collections': delete fullQuery.collections; break;
-            }
-          }
+        const [brandQuery, ...others] = queries;
 
-          const matchedProducts = await Product.find(fullQuery).select('productId').lean();
-          return { productId: { $in: matchedProducts.map(p => p.productId) }, isAvailable: true };
-        };
-
-        const [
-          brandQuery,
-          colorQuery,
-          sizeQuery,
-          materialQuery,
-          seasonQuery,
-          genderQuery, 
-          fabricQuery,
-          workQuery,
-          productGroupQuery,
-          productTypeQuery,
-          categoriesQuery,
-          collectionsQuery
-        ] = await Promise.all([
-          createBestSellerFacetQueryFor('brand'),
-          createBestSellerFacetQueryFor('color'),
-          createBestSellerFacetQueryFor('size'),
-          createBestSellerFacetQueryFor('material'),
-          createBestSellerFacetQueryFor('season'),
-          createBestSellerFacetQueryFor('gender'),
-          createBestSellerFacetQueryFor('fabric'),
-          createBestSellerFacetQueryFor('work'),
-          createBestSellerFacetQueryFor('productGroup'),
-          createBestSellerFacetQueryFor('productType'),
-          createBestSellerFacetQueryFor('categories'),
-          createBestSellerFacetQueryFor('collections')
-        ]);
-
-        const [
-          brands,
-          colors,
-          sizes,
-          materials,
-          seasons,
-          genders, 
-          fabrics,
-          works,
-          productGroups,
-          productTypes,
-          categories,
-          collections,
-          priceStats
-        ] = await Promise.all([
-          getBrandsWithSelection(brandQuery, null, selectedBrands),
-          Product.aggregate([{ $match: colorQuery }, ...createFacetPipeline('color', true)]),
-          Product.aggregate([{ $match: sizeQuery }, ...createFacetPipeline('size', true)]),
-          Product.aggregate([{ $match: materialQuery }, ...createFacetPipeline('material', true)]),
-          Product.aggregate([{ $match: seasonQuery }, ...createFacetPipeline('season', true)]),
-          Product.aggregate([{ $match: genderQuery }, ...createFacetPipeline('gender', true)]),
-          Product.aggregate([{ $match: fabricQuery }, ...createFacetPipeline('fabric', true)]),
-          Product.aggregate([{ $match: workQuery }, ...createFacetPipeline('work', true)]),
-          Product.aggregate([{ $match: productGroupQuery }, ...createSimpleFacetPipeline('productGroup')]),
-          Product.aggregate([{ $match: productTypeQuery }, ...createSimpleFacetPipeline('productType')]),
-          Product.aggregate([{ $match: categoriesQuery }, ...createFacetPipeline('categories')]),
-          Product.aggregate([{ $match: collectionsQuery }, ...createFacetPipeline('collections')]),
-          getCollectionPriceRange(bestSellerQuery, filterParams.collections)
-        ]);
-
-        const filterResults = {
-          categories,
-          collections,
-          colors,
-          sizes,
-          materials,
-          seasons,
-          genders,
-          fabrics,
-          works,
-          productGroups,
-          productTypes
-        };
-
-        response = buildResponseData(
-          filterResults,
-          filterParams,
-          sort,
-          productIds.length,
-          brands,
-          priceStats
+        const brands = await getBrandsWithSelection(brandQuery.match, null, selectedBrands);
+        const facetData = await Promise.all(
+          others.map(({ filter, match }) => buildFacet(match, filter, !['productGroup', 'productType'].includes(filter)))
         );
+
+        const [
+          colors, sizes, materials, seasons, genders, fabrics,
+          works, productGroups, productTypes, categories, collections
+        ] = facetData;
+
+        const priceStats = await getCollectionPriceRange(bestSellerQuery, filterParams.collections);
+
+        response = buildResponseData({
+          categories, collections, colors, sizes, materials, seasons,
+          genders, fabrics, works, productGroups, productTypes
+        }, filterParams, sort, productIds.length, brands, priceStats);
       }
 
     } else {
-      const [
-        currentResultCount,
-        brands,
-        colors,
-        sizes,
-        materials,
-        seasons,
-        genders, 
-        fabrics,
-        works,
-        productGroups,
-        productTypes,
-        categories,
-        collections,
-        priceStats
-      ] = await Promise.all([
-        Product.countDocuments(currentQuery),
-        getBrandsWithSelection(await createFacetQueryFor('brand'), null, selectedBrands),
-        Product.aggregate([{ $match: await createFacetQueryFor('color') }, ...createFacetPipeline('color', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('size') }, ...createFacetPipeline('size', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('material') }, ...createFacetPipeline('material', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('season') }, ...createFacetPipeline('season', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('gender') }, ...createFacetPipeline('gender', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('fabric') }, ...createFacetPipeline('fabric', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('work') }, ...createFacetPipeline('work', true)]),
-        Product.aggregate([{ $match: await createFacetQueryFor('productGroup') }, ...createSimpleFacetPipeline('productGroup')]),
-        Product.aggregate([{ $match: await createFacetQueryFor('productType') }, ...createSimpleFacetPipeline('productType')]),
-        Product.aggregate([{ $match: await createFacetQueryFor('categories') }, ...createFacetPipeline('categories')]),
-        Product.aggregate([{ $match: await createFacetQueryFor('collections') }, ...createFacetPipeline('collections')]),
-        getCollectionPriceRange(await createFacetQueryFor('price'), filterParams.collections)
-      ]);
-
-      const filterResults = {
-        categories,
-        collections,
-        colors,
-        sizes,
-        materials,
-        seasons,
-        genders, 
-        fabrics,
-        works,
-        productGroups,
-        productTypes
-      };
-
+      const currentResultCount = await Product.countDocuments(currentQuery);
+      const { brands, priceStats, filterResults } = await getCommonFacets();
       response = buildResponseData(
         filterResults,
         filterParams,
