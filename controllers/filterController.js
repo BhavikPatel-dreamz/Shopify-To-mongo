@@ -1,5 +1,4 @@
 import Product from '../models/Product.js';
-import Order from '../models/Order.js';
 import { queryPatternTracker } from '../models/Product.js';
 import AdvancedCache from '../utils/AdvancedCache.js';
 import { buildSharedQuery } from './productController.js';
@@ -108,14 +107,6 @@ const processResults = (items) => {
     });
 };
 
-/**
- * Get available filter options based on current search results
- * Returns filter options with counts based on current query context
- * 
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
-
 // Optimized aggregation pipelines
 const createFacetPipeline = (field, isAttribute = false) => {
   const path = isAttribute ? `attributes.${field}` : field;
@@ -140,24 +131,24 @@ const createSimpleFacetPipeline = (field) => [
 const getCollectionPriceRange = async (query, collectionName = null) => {
   try {
     let matchQuery = { ...query };
-    
+
     // If specific collection is provided, add it to the query
     if (collectionName && collectionName !== 'all') {
       matchQuery.collections = collectionName;
     }
-    
+
     const stats = await Product.aggregate([
       { $match: matchQuery },
-      { 
-        $group: { 
-          _id: null, 
-          minPrice: { $min: '$price' }, 
+      {
+        $group: {
+          _id: null,
+          minPrice: { $min: '$price' },
           maxPrice: { $max: '$price' },
           count: { $sum: 1 }
-        } 
+        }
       }
     ]);
-    
+
     return stats[0] || { minPrice: 0, maxPrice: 1000, count: 0 };
   } catch (error) {
     console.error('Error getting collection price range:', error);
@@ -165,19 +156,15 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
   }
 };
 
-const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) => {
+const getBrandsWithSelection = async (baseQuery, selectedBrands) => {
   try {
     const matchStage = { ...baseQuery, isAvailable: true };
-    if (bestSellerIds && bestSellerIds.length > 0) {
-      matchStage.productId = { $in: bestSellerIds };
-    }
 
     console.log('Brand aggregation match stage:', JSON.stringify(matchStage, null, 2));
 
     const allBrands = await Product.aggregate([
       { $match: matchStage },
       { $group: { _id: '$brand', count: { $sum: 1 } } },
-      { $match: { _id: { $ne: null, $exists: true } } }, // Fix: Also exclude empty strings
       { $sort: { count: -1 } }
     ]).option({ maxTimeMS: 15000, allowDiskUse: true });
 
@@ -192,40 +179,13 @@ const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) 
     return [];
   }
 };
-const getBestSellerProducts = async (query) => {
-  try {
-    const products = await Product.find(query).lean();
-    if (!products.length) return { products: [], productIds: [] };
-
-    const productIds = products.map(p => p.productId);
-    const salesData = await Order.aggregate([
-      { $match: { product_id: { $in: productIds } } },
-      { $group: { _id: '$product_id', totalSaleQty: { $sum: '$quantity' } } }
-    ]);
-
-    const salesMap = new Map(salesData.map(item => [item._id, item.totalSaleQty]));
-
-    const sortedProducts = products
-      .map(p => ({ ...p, totalSaleQty: salesMap.get(p.productId) || 0 }))
-      .sort((a, b) => b.totalSaleQty - a.totalSaleQty);
-
-    return {
-      products: sortedProducts,
-      productIds: sortedProducts.map(p => p.productId)
-    };
-  } catch (error) {
-    console.error('Error getting best seller products:', error);
-    return { products: [], productIds: [] };
-  }
-};
 
 // Build response data
-const buildResponseData = (result, filterParams, sort, currentResultCount, brandsWithSelection, priceStats) => ({
+const buildResponseData = (result, filterParams, currentResultCount, brandsWithSelection, priceStats) => ({
   success: true,
   data: {
     currentResultCount,
     appliedFilters: filterParams,
-    sortApplied: sort,
     categories: processResults(result.categories || []),
     collections: processResults(result.collections || []),
     tags: filterParams.tags ? filterParams.tags.split(',').map(tag => ({
@@ -253,10 +213,17 @@ const buildResponseData = (result, filterParams, sort, currentResultCount, brand
   }
 });
 
+/**
+ * Get available filter options based on current search results
+ * Returns filter options with counts based on current query context
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 const getProductFilters = async (req, res) => {
   try {
-    const { sort, ...filterParams } = req.query;
-    const cacheKey = generateFilterCacheKey({ ...filterParams, sort });
+    const filterParams = req.query;
+    const cacheKey = generateFilterCacheKey(filterParams);
 
     const cached = filterCache.get(cacheKey);
     if (cached && filterCache.isValid(cacheKey)) return res.json(cached);
@@ -282,12 +249,63 @@ const getProductFilters = async (req, res) => {
 
     const getAvailableGendersForCollection = async (collections) => {
       const collectionsArray = collections.split(',').map(c => c.trim());
+
+      // Build regex filters
+      const specialCases = {
+        'wedding-lehengas': 'Wedding Lehengas',
+        'all-lehengas': 'All Lehenga\'s',
+      };
+      
+      const regexFilters = collectionsArray.map(keyword => {
+        if (specialCases[keyword]) {
+          return specialCases[keyword];
+        }
+
+        const parts = keyword
+          .toLowerCase()
+          .split(/[-_/\\\s]+/)
+          .filter(Boolean);
+
+        const normalizedParts = parts.map(
+          word => word.charAt(0).toUpperCase() + word.slice(1)
+        );
+
+        const regexPattern = normalizedParts
+          .map(part => `${part}s?`)
+          .join('[\\s/_-]*');
+
+        return new RegExp(`^${regexPattern}$`, 'i');
+      });
+
       const pipeline = [
-        { $match: { collections: { $in: collectionsArray }, isAvailable: true } },
-        { $group: { _id: '$attributes.gender', count: { $sum: 1 } } },
-        { $match: { _id: { $ne: null } } },
-        { $sort: { count: -1 } }
+        {
+          $match: {
+            $and: [
+              { isAvailable: true },
+              {
+                $or: regexFilters.map(regex => ({
+                  collections: { $regex: regex }
+                }))
+              }
+            ]
+          }
+        },
+        {
+          $group: {
+            _id: '$attributes.gender',
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $match: {
+            _id: { $ne: null }
+          }
+        },
+        {
+          $sort: { count: -1 }
+        }
       ];
+
       const result = await Product.aggregate(pipeline);
       return result.map(item => item._id);
     };
@@ -319,7 +337,7 @@ const getProductFilters = async (req, res) => {
         brands,
         ...facets
       ] = await Promise.all([
-        getBrandsWithSelection(facetQueries[0], null, selectedBrands),
+        getBrandsWithSelection(facetQueries[0], selectedBrands),
         ...filters.slice(1).map((f, i) =>
           buildFacet(facetQueries[i + 1], f, !['productGroup', 'productType'].includes(f))
         ),
@@ -341,52 +359,18 @@ const getProductFilters = async (req, res) => {
     };
 
     queryPatternTracker.trackQuery(currentQuery);
-    let response;
 
-    if (sort === 'best_seller') {
-      const { products, productIds, bestSellerQuery } = await getBestSellerProducts(currentQuery);
-      if (!products.length) {
-        response = buildResponseData({}, filterParams, sort, 0, [], { minPrice: 0, maxPrice: 1000 });
-      } else {
-        const filters = Object.keys(attributeMap);
-        const queries = await Promise.all(filters.map(async (f) => {
-          const base = await buildFacetQuery(f);
-          const matched = await Product.find(base).select('productId').lean();
-          return { filter: f, match: { productId: { $in: matched.map(p => p.productId) }, isAvailable: true } };
-        }));
-
-        const [brandQuery, ...others] = queries;
-
-        const brands = await getBrandsWithSelection(brandQuery.match, null, selectedBrands);
-        const facetData = await Promise.all(
-          others.map(({ filter, match }) => buildFacet(match, filter, !['productGroup', 'productType'].includes(filter)))
-        );
-
-        const [
-          colors, sizes, materials, seasons, genders, fabrics,
-          works, productGroups, productTypes, categories, collections
-        ] = facetData;
-
-        const priceStats = await getCollectionPriceRange(bestSellerQuery, filterParams.collections);
-
-        response = buildResponseData({
-          categories, collections, colors, sizes, materials, seasons,
-          genders, fabrics, works, productGroups, productTypes
-        }, filterParams, sort, productIds.length, brands, priceStats);
-      }
-
-    } else {
-      const currentResultCount = await Product.countDocuments(currentQuery);
-      const { brands, priceStats, filterResults } = await getCommonFacets();
-      response = buildResponseData(
-        filterResults,
-        filterParams,
-        sort,
-        currentResultCount,
-        brands,
-        priceStats
-      );
-    }
+    // Get current result count and filter options
+    const currentResultCount = await Product.countDocuments(currentQuery);
+    const { brands, priceStats, filterResults } = await getCommonFacets();
+    
+    const response = buildResponseData(
+      filterResults,
+      filterParams,
+      currentResultCount,
+      brands,
+      priceStats
+    );
 
     filterCache.set(cacheKey, response);
     return res.json(response);
@@ -400,6 +384,7 @@ const getProductFilters = async (req, res) => {
     });
   }
 };
+
 export default {
   getProductFilters
 };
