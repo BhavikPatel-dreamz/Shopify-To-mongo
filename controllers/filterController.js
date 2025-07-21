@@ -177,7 +177,7 @@ const getBrandsWithSelection = async (baseQuery, bestSellerIds, selectedBrands) 
     const allBrands = await Product.aggregate([
       { $match: matchStage },
       { $group: { _id: '$brand', count: { $sum: 1 } } },
-      { $match: { _id: { $ne: null, $ne: '', $exists: true } } }, // Fix: Also exclude empty strings
+      { $match: { _id: { $ne: null, $exists: true } } }, // Fix: Also exclude empty strings
       { $sort: { count: -1 } }
     ]).option({ maxTimeMS: 15000, allowDiskUse: true });
 
