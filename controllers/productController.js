@@ -112,7 +112,7 @@ export const buildSharedQuery = async (queryParams) => {
         limit: parseInt(queryParams.limit || 20),
         minScore: 0.6
       });
-      
+
       if (similarProducts.length > 0) {
         query._id = { $in: similarProducts.map(p => p.productId) };
       } else {
@@ -148,6 +148,7 @@ export const buildSharedQuery = async (queryParams) => {
     collections.toLowerCase() !== 'products' &&
     collections.toLowerCase() !== 'all'
   ) {
+
     const collectionArray = collections.split(',').map(c => c.trim());
     const specialCases = {
       'wedding-lehengas': 'Wedding Lehengas',
@@ -156,24 +157,26 @@ export const buildSharedQuery = async (queryParams) => {
 
     query.collections = {
       $in: collectionArray.map(keyword => {
-        keyword = keyword.replace(/\b(?!\$)(\d+)\b/g, '$$$1');
-
-        // Check if there's a special case first
+        // Check for special case
         if (specialCases[keyword]) {
           return specialCases[keyword];
         }
 
-        // Otherwise, use dynamic regex transformation
-        const normalized = keyword
-          .replaceAll('-', ' ')
-          .replace(/\b\w/g, l => l.toUpperCase())
-          .trim();
+        // Normalize to words
+        const parts = keyword
+          .toLowerCase()
+          .split(/[-_/\\\s]+/)  // Split on -, /, \, space, underscore
+          .filter(Boolean);
 
-        // Create flexible regex pattern
-        const regexPattern = normalized
-          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          .replace(/\s+/g, '\\s*')  // flexible spacing
-          .replace(/s$/i, 's?');    // optional plural
+        // Capitalize each part (e.g., danglers => Danglers)
+        const normalizedParts = parts.map(
+          word => word.charAt(0).toUpperCase() + word.slice(1)
+        );
+
+        // Create flexible regex (allow separators or nothing between words)
+        const regexPattern = normalizedParts
+          .map(part => `${part}s?`) // make plural "s" optional
+          .join('[\\s/_-]*');       // allow flexible separators
 
         return new RegExp(`^${regexPattern}$`, 'i');
       })
@@ -264,15 +267,15 @@ const getBestSellingProducts = async (filters, limit, skip) => {
   try {
     // Build the product query from filters
     const productQuery = await buildSharedQuery(filters);
-    
+
     // Get total count of products that match the filters
     const totalProducts = await Product.countDocuments(productQuery);
-    
+
     // Use aggregation to get products with sales data and apply filters
     const pipeline = [
       // Match products based on filters
       { $match: productQuery },
-      
+
       // Lookup orders for each product
       {
         $lookup: {
@@ -282,7 +285,7 @@ const getBestSellingProducts = async (filters, limit, skip) => {
           as: 'orders'
         }
       },
-      
+
       // Add total sales quantity field
       {
         $addFields: {
@@ -291,14 +294,14 @@ const getBestSellingProducts = async (filters, limit, skip) => {
           }
         }
       },
-      
+
       // Sort by total sales quantity in descending order
       { $sort: { totalSaleQty: -1 } },
-      
+
       // Apply pagination
       { $skip: skip },
       { $limit: limit },
-      
+
       // Remove orders field and keep only necessary data
       {
         $project: {
@@ -347,7 +350,7 @@ const getBestSellingProducts = async (filters, limit, skip) => {
 const getProducts = async (req, res) => {
   try {
     const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', bypassCache = false, ...filters } = req.query;
-    
+
     // Include pagination and sorting in cache key
     const cacheFilters = {
       ...filters,
@@ -379,7 +382,7 @@ const getProducts = async (req, res) => {
     // Handle best seller sorting separately
     if (sort === 'best_seller') {
       const { products, total } = await getBestSellingProducts(filters, limitNum, skip);
-      
+
       response = {
         success: true,
         data: {
@@ -456,12 +459,12 @@ const getProducts = async (req, res) => {
     if (!bypassCache) {
       productCache.set(baseKey, response);
     }
-    
+
     res.json(response);
 
   } catch (error) {
     console.error('Error fetching products:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to fetch products',
       message: error.message
@@ -470,71 +473,71 @@ const getProducts = async (req, res) => {
 };
 
 export const getProductSalesStats = async (req, res) => {
-    try {
-        const { limit = 20, page = 1 } = req.query;
-        const skip = (page - 1) * limit;
+  try {
+    const { limit = 20, page = 1 } = req.query;
+    const skip = (page - 1) * limit;
 
-        // Aggregate orders to get sales statistics
-        const salesStats = await Order.aggregate([
-            {
-                $group: {
-                    _id: '$product_id',
-                    totalSale: { $sum: '$quantity' }
-                }
-            },
-            {
-                $sort: { totalSale: -1 }
-            },
-            {
-                $skip: skip
-            },
-            {
-                $limit: parseInt(limit)
-            },
-            {
-                $project: {
-                    _id: 0,
-                    productId: '$_id',
-                    totalSale: 1
-                }
-            }
-        ]);
+    // Aggregate orders to get sales statistics
+    const salesStats = await Order.aggregate([
+      {
+        $group: {
+          _id: '$product_id',
+          totalSale: { $sum: '$quantity' }
+        }
+      },
+      {
+        $sort: { totalSale: -1 }
+      },
+      {
+        $skip: skip
+      },
+      {
+        $limit: parseInt(limit)
+      },
+      {
+        $project: {
+          _id: 0,
+          productId: '$_id',
+          totalSale: 1
+        }
+      }
+    ]);
 
-        // Get total count for pagination
-        const totalProducts = await Order.aggregate([
-            {
-                $group: {
-                    _id: '$product_id'
-                }
-            },
-            {
-                $count: 'total'
-            }
-        ]);
+    // Get total count for pagination
+    const totalProducts = await Order.aggregate([
+      {
+        $group: {
+          _id: '$product_id'
+        }
+      },
+      {
+        $count: 'total'
+      }
+    ]);
 
-        const total = totalProducts[0]?.total || 0;
+    const total = totalProducts[0]?.total || 0;
 
-        res.json({
-            success: true,
-            data: {
-                salesStats,
-                pagination: {
-                    total,
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    pages: Math.ceil(total / limit)
-                }
-            }
-        });
+    res.json({
+      success: true,
+      data: {
+        salesStats,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
 
-    } catch (error) {
-        console.error('Error fetching product sales stats:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to fetch product sales statistics',
-            message: error.message
-        });
-    }
+  } catch (error) {
+    console.error('Error fetching product sales stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch product sales statistics',
+      message: error.message
+    });
+  }
 };
 
 // Updated getBestSellingProducts function for external use
