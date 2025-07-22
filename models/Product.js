@@ -176,7 +176,10 @@ const ProductSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
+  collection_handle:{
+    type: [String],
+    index: true
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -209,18 +212,21 @@ ProductSchema.index({ isAvailable: 1, price: 1 }, { background: true });
 // 3. Collection-based queries (most common)
 ProductSchema.index({ 
   isAvailable: 1, 
-  collections: 1 
+  collections: 1 ,
+  collection_handle:1
 }, { name: 'collection_filter', background: true });
 
 ProductSchema.index({ 
   isAvailable: 1, 
   collections: 1, 
+  collection_handle:1,
   createdAt: -1 
 }, { name: 'collection_sort', background: true });
 
 ProductSchema.index({ 
   isAvailable: 1, 
-  collections: 1, 
+  collections: 1,
+  collection_handle:1,
   price: 1 
 }, { name: 'collection_price', background: true });
 
@@ -280,6 +286,7 @@ ProductSchema.index({
 ProductSchema.index({
   isAvailable: 1,
   collections: 1,
+  collection_handle:1,
   'attributes.color': 1,
   'attributes.size': 1,
   'attributes.material': 1,
@@ -292,6 +299,7 @@ ProductSchema.index({
 ProductSchema.index({
   isAvailable: 1,
   collections: 1,
+  collection_handle:1,
   categories: 1,
   brand: 1,
   price: 1,
@@ -320,6 +328,12 @@ ProductSchema.pre('save', function (next) {
   // Normalize collections
   if (this.collections && Array.isArray(this.collections)) {
     this.collections = this.collections.map(c =>
+      slugify(c, { lower: true, strict: true })
+    );
+  }
+
+  if (this.collection_handle && Array.isArray(this.collection_handle)) {
+    this.collection_handle = this.collection_handle.map(c =>
       slugify(c, { lower: true, strict: true })
     );
   }
@@ -475,7 +489,7 @@ const queryPatternTracker = {
       fields.forEach(field => {
         if (field.startsWith('attributes.')) {
           suggestion.suggestedIndex[field] = 1;
-        } else if (['collections', 'categories', 'brand', 'productGroup', 'productType'].includes(field)) {
+        } else if (['collections', 'categories', 'brand', 'productGroup', 'productType','collection_handle'].includes(field)) {
           suggestion.suggestedIndex[field] = 1;
         } else if (field === 'price') {
           suggestion.suggestedIndex[field] = 1;
@@ -504,7 +518,7 @@ const createDynamicIndex = async (queryPattern) => {
         indexFields[field] = 1;
       } else if (field.startsWith('attributes.')) {
         indexFields[field] = 1;
-      } else if (['categories', 'collections', 'tags', 'brand', 'productGroup', 'productType'].includes(field)) {
+      } else if (['categories', 'collections','collection_handle', 'tags', 'brand', 'productGroup', 'productType'].includes(field)) {
         indexFields[field] = 1;
       }
     });
@@ -560,10 +574,11 @@ ProductSchema.statics.findAvailable = function(conditions = {}) {
   return this.find({ isAvailable: true, ...conditions });
 };
 
-ProductSchema.statics.findByCollection = function(collection, conditions = {}) {
+ProductSchema.statics.findByCollection = function(collection, conditions = {},collection_handle) {
   return this.find({ 
     isAvailable: true, 
     collections: collection,
+    collection_handle:collection_handle,
     ...conditions 
   });
 };
