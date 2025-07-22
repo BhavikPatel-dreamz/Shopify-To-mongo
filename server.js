@@ -7,7 +7,7 @@ import webhookRoutes from './routes/webhookRoutes.js';
 import { startOrderCleanupJob } from './cron/cleanupOrders.js';
 import { startProductAddedJob } from './migrations/migrateShopifyProducts.js';
 import { startOrderAddedJob } from './migrations/migrateShopifyOrders.js';
-//import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
+import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,7 +25,7 @@ startProductAddedJob();
 // Middleware
 app.use(cors());
 app.use(json());
-//app.use(ipWhitelist); // Apply the IP whitelist middleware
+app.use(ipWhitelist); // Apply the IP whitelist middleware
 
 // Routes
 app.use('/api', routes);
