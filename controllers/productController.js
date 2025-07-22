@@ -143,46 +143,22 @@ export const buildSharedQuery = async (queryParams) => {
     query.categories = { $in: createCaseInsensitivePatterns(category) };
   }
 
-  if (
-    collections &&
-    collections.toLowerCase() !== 'products' &&
-    collections.toLowerCase() !== 'all'
-  ) {
-
-    const collectionArray = collections.split(',').map(c => c.trim());
-    const specialCases = {
-      'wedding-lehengas': 'Wedding Lehengas',
-      'all-lehengas': 'All Lehenga\'s',
+ const collectionParam = collections  // Use collection first, fallback to collection_handle
+  if (collectionParam && collectionParam.toLowerCase() !== 'products' && collectionParam.toLowerCase() !== 'all') {
+    const collectionArray = Array.isArray(collectionParam) 
+      ? collectionParam 
+      : collectionParam.split(',').map(c => c.trim());
+    
+    query.collection_handle = {
+      $in: createCaseInsensitivePatterns(collectionArray)
     };
-
-    query.collections = {
-      $in: collectionArray.map(keyword => {
-        // Check for special case
-        if (specialCases[keyword]) {
-          return specialCases[keyword];
-        }
-
-        // Normalize to words
-        const parts = keyword
-          .toLowerCase()
-          .split(/[-_/\\\s]+/)  // Split on -, /, \, space, underscore
-          .filter(Boolean);
-
-        // Capitalize each part (e.g., danglers => Danglers)
-        const normalizedParts = parts.map(
-          word => word.charAt(0).toUpperCase() + word.slice(1)
-        );
-
-        // Create flexible regex (allow separators or nothing between words)
-        const regexPattern = normalizedParts
-          .map(part => `${part}s?`) // make plural "s" optional
-          .join('[\\s/_-]*');       // allow flexible separators
-
-        return new RegExp(`^${regexPattern}$`, 'i');
-      })
-    };
+    
+    console.log('Collection filter applied:', {
+      inputParam: collectionParam,
+      queryField: 'collection_handle',
+      patterns: createCaseInsensitivePatterns(collectionArray)
+    });
   }
-
   if (tags) {
     query.tags = { $in: createCaseInsensitivePatterns(tags) };
   }

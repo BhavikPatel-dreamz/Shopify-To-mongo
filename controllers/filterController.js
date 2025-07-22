@@ -107,7 +107,7 @@ const processResults = (items) => {
     });
 };
 
-// Optimized aggregation pipelines
+// // Optimized aggregation pipelines
 const createFacetPipeline = (field, isAttribute = false) => {
   const path = isAttribute ? `attributes.${field}` : field;
 
@@ -134,7 +134,7 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
 
     // If specific collection is provided, add it to the query
     if (collectionName && collectionName !== 'all') {
-      matchQuery.collections = collectionName;
+      matchQuery.collection_handle = collectionName;
     }
 
     const stats = await Product.aggregate([
@@ -159,8 +159,6 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
 const getBrandsWithSelection = async (baseQuery, selectedBrands) => {
   try {
     const matchStage = { ...baseQuery, isAvailable: true };
-
-    console.log('Brand aggregation match stage:', JSON.stringify(matchStage, null, 2));
 
     const allBrands = await Product.aggregate([
       { $match: matchStage },
@@ -188,6 +186,7 @@ const buildResponseData = (result, filterParams, currentResultCount, brandsWithS
     appliedFilters: filterParams,
     categories: processResults(result.categories || []),
     collections: processResults(result.collections || []),
+    collection_handle: processResults(result.collection_handle || []),
     tags: filterParams.tags ? filterParams.tags.split(',').map(tag => ({
       value: tag.trim(),
       count: currentResultCount
@@ -244,38 +243,12 @@ const getProductFilters = async (req, res) => {
       productGroup: 'productGroup',
       productType: 'productType',
       categories: 'categories',
-      collections: 'collections'
+      collections: 'collections',
+      collection_handle:'collection_handle'
     };
 
-    const getAvailableGendersForCollection = async (collections) => {
-      const collectionsArray = collections.split(',').map(c => c.trim());
-
-      // Build regex filters
-      const specialCases = {
-        'wedding-lehengas': 'Wedding Lehengas',
-        'all-lehengas': 'All Lehenga\'s',
-      };
-      
-      const regexFilters = collectionsArray.map(keyword => {
-        if (specialCases[keyword]) {
-          return specialCases[keyword];
-        }
-
-        const parts = keyword
-          .toLowerCase()
-          .split(/[-_/\\\s]+/)
-          .filter(Boolean);
-
-        const normalizedParts = parts.map(
-          word => word.charAt(0).toUpperCase() + word.slice(1)
-        );
-
-        const regexPattern = normalizedParts
-          .map(part => `${part}s?`)
-          .join('[\\s/_-]*');
-
-        return new RegExp(`^${regexPattern}$`, 'i');
-      });
+    const getAvailableGendersForCollection = async (collection_handle) => {
+      const collectionsArray = collection_handle.split(',').map(c => c.trim());
 
       const pipeline = [
         {
@@ -283,9 +256,7 @@ const getProductFilters = async (req, res) => {
             $and: [
               { isAvailable: true },
               {
-                $or: regexFilters.map(regex => ({
-                  collections: { $regex: regex }
-                }))
+                  collections: collectionsArray
               }
             ]
           }
@@ -363,7 +334,7 @@ const getProductFilters = async (req, res) => {
     // Get current result count and filter options
     const currentResultCount = await Product.countDocuments(currentQuery);
     const { brands, priceStats, filterResults } = await getCommonFacets();
-    
+
     const response = buildResponseData(
       filterResults,
       filterParams,
