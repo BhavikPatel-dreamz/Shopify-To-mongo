@@ -456,9 +456,9 @@ const getProducts = async (req, res) => {
     }
 
     // Store in cache only if not bypassing
-    if (!bypassCache) {
+   // if (!bypassCache) {
       productCache.set(baseKey, response);
-    }
+   // }
 
     res.json(response);
 
