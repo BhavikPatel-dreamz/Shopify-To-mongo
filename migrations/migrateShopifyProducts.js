@@ -6,12 +6,12 @@ import processBatch from './products/processBatch.js';
 import MigrationState from '../models/MigrationState.js';
 import cron from "node-cron";
 
-// Initialize MongoDB connection
-await connectDB();
+// // Initialize MongoDB connection
+// await connectDB();
 
-/**
- * Get the last saved cursor state
- */
+// /**
+//  * Get the last saved cursor state
+//  */
 async function getLastCursor() {
   try {
     const state = await MigrationState.findOne({ name: 'shopify_products' });
@@ -20,17 +20,26 @@ async function getLastCursor() {
     console.error('Error fetching last cursor:', error);
     return null;
   }
-} 
+}
+async function getLastRun() {
+  try {
+    const state = await MigrationState.findOne({ name: 'shopify_products_sync' });
+    return state
+  } catch (error) {
+    console.error('Error fetching last cursor:', error);
+    return null;
+  }
+}
 
-/**
- * Update the cursor state
- */
+// /**
+//  * Update the cursor state
+//  */
 async function updateCursorState(cursor, totalProcessed) {
   try {
     await MigrationState.findOneAndUpdate(
       { name: 'shopify_products' },
-      { 
-        lastCursor: cursor, 
+      {
+        lastCursor: cursor,
         lastRun: new Date(),
         totalProcessed: totalProcessed
       },
@@ -40,41 +49,57 @@ async function updateCursorState(cursor, totalProcessed) {
     console.error('Error updating cursor state:', error);
   }
 }
+async function updateCursorStateOnly(cursor, totalProcessed, endDate) {
+  try {
+    await MigrationState.findOneAndUpdate(
+      { name: 'shopify_products_sync' },
+      {
+        lastCursor: cursor,
+        lastRun: endDate,
+        totalProcessed: totalProcessed
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    console.error('Error updating cursor state:', error);
+  }
+}
+
 
 /**
  * Main migration function with pagination
  */
-async function migrateProducts() { 
+async function migrateProducts() {
   console.log('Starting product migration...');
-  
+
   let hasNextPage = true;
   let cursor = await getLastCursor();
   let totalProcessed = 0;
-  
+
   // Log the starting point
   if (cursor) {
     console.log('Resuming migration from cursor:', cursor);
   } else {
     console.log('Starting new migration from the beginning');
   }
-  
+
   while (hasNextPage) {
     try {
       // If cursor is null, it will start from the beginning
       const data = await shopifyClient.query(productsQuery, { cursor });
       const products = data.products.edges.map(edge => edge.node);
-      
+
       await processBatch(products);
-      
+
       hasNextPage = data.products.pageInfo.hasNextPage;
       cursor = data.products.pageInfo.endCursor;
       totalProcessed += products.length;
-      
+
       // Update the cursor state after each batch
       await updateCursorState(cursor, totalProcessed);
-      
+
       console.log(`Processed ${totalProcessed} products so far.`);
-      
+
       // Add delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 3000));
     } catch (error) {
@@ -90,12 +115,17 @@ async function migrateProducts() {
 }
 
 async function syncShopifyProducts() {
+  console.log('🚀 Cron job started at:', new Date().toISOString());
+
   let hasNextPage = true;
-  let cursor = await getLastCursor();
   let totalProcessed = 0;
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const updatedAtQuery = `updated_at:>=${yesterday.toISOString().split('T')[0]}`;
+  //--old code--//
+  // const yesterday = new Date();
+  // yesterday.setDate(yesterday.getDate() - 1);
+  // const updatedAtQuery = `updated_at:>=${yesterday.toISOString().split('T')[0]}`;
+  const { lastRun, lastCursor } = await getLastRun();
+  let cursor = lastCursor
+  const updatedAtQuery = `updated_at:>=${lastRun.toISOString().split('T')[0]}`;
 
   if (cursor) {
     console.log('Resuming migration from cursor:', cursor);
@@ -103,35 +133,41 @@ async function syncShopifyProducts() {
     console.log('Starting new migration from the beginning');
   }
 
-  while (hasNextPage) {
-    try {
+  try {
+    while (hasNextPage) {
+      try {
+        console.log(getRun.lastCursor)
+        const data = await shopifyClient.query(productsQuery, { cursor, updatedAtQuery });
+        const products = data.products.edges.map(edge => edge.node);
+        await processBatch(products);
 
-      const data = await shopifyClient.query(productsQuery, { cursor,updatedAtQuery });
-      const products = data.products.edges.map(edge => edge.node);
-      await processBatch(products);
-
-      hasNextPage = data.products.pageInfo.hasNextPage;
-      cursor = data.products.pageInfo.endCursor;
-      totalProcessed += products.length;
-
-      await updateCursorState(cursor, totalProcessed);
-      console.log(`Processed ${totalProcessed} products}`);
-    } catch (error) {
-      console.error('Error during migration:', error);
-      await updateCursorState(cursor, totalProcessed);
-      break;
+        hasNextPage = data.products.pageInfo.hasNextPage;
+        cursor = data.products.pageInfo.endCursor;
+        totalProcessed += products.length;
+        const endDate = new Date().toISOString()
+        await updateCursorStateOnly(cursor, totalProcessed, endDate);
+      } catch (error) {
+        console.error('Error during migration:', error);
+        const endDate = new Date().toISOString()
+        await updateCursorStateOnly(cursor, totalProcessed, endDate);
+      }
     }
+    console.log(` Migration completed at ${new Date().toISOString()}. Total products processed: ${totalProcessed}`);
+  } catch (error) {
+    console.error(' Cron job failed:', error);
   }
-  console.log(`Migration completed. Total products processed: ${totalProcessed}`);
 }
 
-// Schedule the product added job 
+// Schedule the product sync job 
 export const startProductAddedJob = () => {
-  cron.schedule('0 0 * * *', syncShopifyProducts);
+  cron.schedule('0 * * * *', syncShopifyProducts);
   console.log('Product added job scheduled');
 };
+
 // Run migration
 // migrateProducts().catch(error => {
 //   console.error('Migration failed:', error);
 //   process.exit(1);
 // }); 
+// Update cursor and total processed without lastRun (used during processing)
+
