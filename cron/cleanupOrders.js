@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import Order from '../models/Order.js';
+import Product from '../models/Product.js';
 
 // Run every day at midnight
 const cleanupOldOrders = async () => {
@@ -12,13 +13,37 @@ const cleanupOldOrders = async () => {
         });
 
         console.log(`Cleaned up ${result.deletedCount} old orders`);
+        return { success: true, deletedCount: result.deletedCount };
     } catch (error) {
         console.error('Error cleaning up old orders:', error);
+        return { success: false, error: error.message };
     }
 };
 
-// Schedule the cleanup job to run daily at midnight
+const cleanupProducts = async () => {
+    try {
+        const now = new Date();
+        
+        const result = await Product.deleteMany({
+            updatedAt: {$lte: now },
+            isAvailable: false
+        });
+
+        console.log(`Cleaned up ${result.deletedCount} unavailable products`);
+        return { success: true, deletedCount: result.deletedCount };
+    } catch (error) {
+        console.error('Error cleaning up products:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Schedule both cleanup jobs to run daily at midnight
 export const startOrderCleanupJob = () => {
     cron.schedule('0 0 * * *', cleanupOldOrders);
-    console.log('Order cleanup job scheduled');
-}; 
+    console.log('Daily cleanup jobs scheduled');
+};
+export const startProductCleanupJob = () => {
+    cron.schedule('0 * * * *', cleanupProducts);
+    console.log('Daily cleanup jobs scheduled');
+};
+
