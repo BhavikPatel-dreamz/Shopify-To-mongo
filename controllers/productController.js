@@ -376,6 +376,7 @@ const getProducts = async (req, res) => {
     } else {
       // Handle other sorting options
       const query = await buildSharedQuery(filters);
+      console.log('query', query);
 
       // Determine sort order
       let sortOptions = {};
