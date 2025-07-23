@@ -136,7 +136,6 @@ async function syncShopifyProducts() {
   try {
     while (hasNextPage) {
       try {
-        console.log(getRun.lastCursor)
         const data = await shopifyClient.query(productsQuery, { cursor, updatedAtQuery });
         const products = data.products.edges.map(edge => edge.node);
         await processBatch(products);
