@@ -25,7 +25,7 @@ startProductAddedJob();
 // Middleware
 app.use(cors());
 app.use(json());
-app.use(ipWhitelist); // Apply the IP whitelist middleware
+//app.use(ipWhitelist); // Apply the IP whitelist middleware
 
 // Routes
 app.use('/api', routes);
