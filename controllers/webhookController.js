@@ -45,7 +45,7 @@ export const handleProductDelete = async (req, res) => {
     try {
         const productData = req.body;
         
-        await Product.findOneAndDelete( { shopifyId: productData.shopifyId });
+        await Product.findOneAndDelete( { productId: productData.id });
         
         res.status(200).json({ success: true , message: 'Product deleted successfully' });
     } catch (error) {
