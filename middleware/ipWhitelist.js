@@ -11,12 +11,16 @@ const allowedIPs = [
 ];
 
 const ipWhitelist = (req, res, next) => {
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
 
-  if (req.headers.origin === 'https://trendia.co' || req.headers.referer === 'https://trendia.co/') {
+  if (origin === 'https://trendia.co' || referer === 'https://trendia.co/') {
+    return next();
+  } else if (process.env.NODE_ENV === 'development') {
     return next();
   }
 
   res.status(403).json({ error: 'Access denied' });
 };
 
-export default ipWhitelist; 
+export default ipWhitelist;

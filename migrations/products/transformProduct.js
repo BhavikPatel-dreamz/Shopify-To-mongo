@@ -147,7 +147,7 @@ function transformProduct(shopifyProduct) {
     
     productUrl: productUrl,
     
-    isAvailable: variants.some(v => v.inventory > 0),
+    isAvailable: shopifyProduct.status == 'active' ? true : false,
     hasEmbedding: false,
     vectorId: null,
     createdAt: new Date(shopifyProduct.createdAt),
