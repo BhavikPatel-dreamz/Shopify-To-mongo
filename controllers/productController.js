@@ -153,11 +153,6 @@ export const buildSharedQuery = async (queryParams) => {
       $in: createCaseInsensitivePatterns(collectionArray)
     };
     
-    console.log('Collection filter applied:', {
-      inputParam: collectionParam,
-      queryField: 'collection_handle',
-      patterns: createCaseInsensitivePatterns(collectionArray)
-    });
   }
   if (tags) {
     query.tags = { $in: createCaseInsensitivePatterns(tags) };
