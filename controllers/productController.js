@@ -14,7 +14,7 @@ import Order from '../models/Order.js';
  */
 const productCache = new AdvancedCache({
   maxSize: 2000,
-  timeout: 5 * 24 * 60 * 60 * 1000, // 5 days
+  timeout: 10 * 60 * 1000, // 10 min 
   cleanupInterval: 10 * 60 * 1000 // 10 minutes
 });
 
