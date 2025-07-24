@@ -1,3 +1,4 @@
+import Collection from '../models/Collection.js';
 /**
  * Generates a unique cache key from query parameters
  * @param {Object} queryParams - Request query parameters
