@@ -7,7 +7,7 @@ import MigrationState from '../models/MigrationState.js';
 import cron from "node-cron";
 
 // // Initialize MongoDB connection
-// await connectDB();
+await connectDB();
 
 // /**
 //  * Get the last saved cursor state

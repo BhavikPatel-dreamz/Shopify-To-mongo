@@ -221,7 +221,7 @@ const buildResponseData = (result, filterParams, currentResultCount, brandsWithS
  */
 const getProductFilters = async (req, res) => {
   try {
-    const { bypassCache = false ,...filterParams } = req.query;
+    const { bypassCache = 'false' ,...filterParams } = req.query;
 
       const cacheFilters = {
       ...filterParams
