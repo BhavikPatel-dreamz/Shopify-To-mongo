@@ -26,13 +26,13 @@ startProductCleanupJob();
 // Middleware
 app.use(cors());
 app.use(json());
+app.use('/webhooks', webhookRoutes);
 app.use(ipWhitelist); // Apply the IP whitelist middleware
 
 // Routes
 app.use('/api', routes);
 
 // Webhook routes - no IP whitelist for Shopify webhooks
-app.use('/webhooks', webhookRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

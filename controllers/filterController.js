@@ -13,7 +13,7 @@ import { buildSharedQuery } from './productController.js';
  */
 const filterCache = new AdvancedCache({
   maxSize: 2000,
-  timeout: 5 * 24 * 60 * 60 * 1000, // 5 days
+  timeout: 5 * 60 * 1000, // 5 days
   cleanupInterval: 5 * 60 * 1000 // 5 minutes
 });
 
