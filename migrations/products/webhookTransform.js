@@ -97,8 +97,8 @@ export function transformWebhookProduct(webhookProduct) {
     images: images,
     imageUrl: webhookProduct.image?.src || '',
     productUrl: productUrl,
-    
-    isAvailable: variants.some(v => v.inventory > 0),
+
+    isAvailable: webhookProduct.status == 'active' ? true : false,
     hasEmbedding: false,
     vectorId: null,
     createdAt: new Date(webhookProduct.created_at),

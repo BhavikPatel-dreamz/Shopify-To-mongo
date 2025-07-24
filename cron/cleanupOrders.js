@@ -116,10 +116,9 @@ export const startOrderCleanupJob = () => {
     console.log('Daily cleanup jobs scheduled');
 };
 export const startProductCleanupJob = () => {
-    cron.schedule('0 * * * *', cleanupProducts);
-    console.log('Daily cleanup jobs scheduled');
+    cron.schedule('*/15 * * * *', cleanupProducts);
+    console.log('Cleanup jobs scheduled every 15 minutes');
 };
-
 export const startProductAddedJob = () => {
   cron.schedule('0 * * * *', syncShopifyProducts);
   console.log('Product added job scheduled');
