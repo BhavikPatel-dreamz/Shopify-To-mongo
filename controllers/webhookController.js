@@ -2,6 +2,10 @@ import Product from '../models/Product.js';
 import { transformWebhookProduct } from '../migrations/products/webhookTransform.js';
 import Order from '../models/Order.js';
 import Collection from '../models/Collection.js';
+import { getProductsCollectionsHanls } from '../utils/comman.js';
+
+
+
 
 /**
  * Handle product update webhook from Shopify
@@ -17,43 +21,13 @@ export const handleProductUpdate = async (req, res) => {
     // Get the raw product data from webhook
     const shopifyProduct = req.body;
 
-    console.log(shopifyProduct)
-    //
-    // const allCollections = await Collection.find({}, { title: 1, handle: 1 }).lean();
-
-    // // Create a map for faster lookup: title -> handle
-    // const collectionTitleToHandle = new Map();
-    // allCollections.forEach(collection => {
-    //   collectionTitleToHandle.set(collection.title, collection.handle);
-    // });
-
+    console.log(shopifyProduct);
 
     // Transform the product data
     const productData = transformWebhookProduct(shopifyProduct);
-    let collectionHandles = [];
 
-    if (productData.collections && Array.isArray(productData.collections)) {
-      // Query only the needed collections by title
-      const matchedCollections = await Collection.find(
-        { title: { $in: productData.collections } },
-        { title: 1, handle: 1 }
-      ).lean();
+    const collectionHandles = await getProductsCollectionsHanls(productData.collections);
 
-      // Create a map for faster lookup: title -> handle
-      const collectionTitleToHandle = new Map();
-      matchedCollections.forEach(collection => {
-        collectionTitleToHandle.set(collection.title, collection.handle);
-      });
-
-      productData.collections.forEach(collectionTitle => {
-        if (collectionTitleToHandle.has(collectionTitle)) {
-          const handle = collectionTitleToHandle.get(collectionTitle);
-          collectionHandles.push(handle);
-        } else {
-          console.warn(`Collection not found in collections table: "${collectionTitle}"`);
-        }
-      });
-    }
 
     // Add collection_handle array to product data
     productData.collection_handle = collectionHandles;

@@ -3,36 +3,12 @@ import Collection from '../../models/Collection.js';
 import * as embeddingService from '../../services/embeddingService.js';
 import * as vectorService from '../../services/vectorService.js';
 import { transformProduct } from './transformProduct.js';
+import { getProductsCollectionsHanls } from '../../utils/comman.js';
 
 async function processBatch(products) {
   console.log(`Processing batch of ${products.length} products...`);
   
-  // for (const shopifyProduct of products) {
-  //   try {
-  //     // Transform Shopify product to our schema
-  //     const productData = transformProduct(shopifyProduct);
-  //     console.log('Transformed Product Data:', productData);
-
-  //     // Save or update product in MongoDB
-  //     const product = await Product.findOneAndUpdate(
-  //       { shopifyId: productData.shopifyId },
-  //       productData,
-  //       { 
-  //         upsert: true, 
-  //         new: true,
-  //         runValidators: true // This ensures schema validation
-  //       }
-  //     );
-
   
-  //------new-code
-  const allCollections = await Collection.find({}, { title: 1, handle: 1 }).lean();
-  
-  // Create a map for faster lookup: title -> handle
-  const collectionTitleToHandle = new Map();
-  allCollections.forEach(collection => {
-    collectionTitleToHandle.set(collection.title, collection.handle);
-  });
   
   for (const shopifyProduct of products) {
     try {
@@ -41,20 +17,8 @@ async function processBatch(products) {
       console.log('Transformed Product Data:', productData);
       
       // Process collection mapping
-      let collectionHandles = [];
       
-      if (productData.collections && Array.isArray(productData.collections)) {
-        productData.collections.forEach(collectionTitle => {
-          // Check if collection title exists in collections table
-          if (collectionTitleToHandle.has(collectionTitle)) {
-            const handle = collectionTitleToHandle.get(collectionTitle);
-            collectionHandles.push(handle);
-          } else {
-            console.warn(`Collection not found in collections table: "${collectionTitle}"`);
-          }
-        });
-      }
-      
+      const collectionHandles = await getProductsCollectionsHanls(productData.collections);
       // Add collection_handle array to product data
       productData.collection_handle = collectionHandles;
       // Save or update product in MongoDB
