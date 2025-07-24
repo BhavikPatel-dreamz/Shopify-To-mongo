@@ -61,6 +61,10 @@ export function transformWebhookProduct(webhookProduct) {
     alt: image.alt || ''
   }));
 
+  console.log("&&&***",webhookProduct)
+
+  //const collections = webhookProduct.collections.edges.map(({ node }) => node.title);
+
   // Construct the product URL
   const productUrl = `https://${process.env.SHOPIFY_STORE_NAME}.myshopify.com/products/${webhookProduct.handle}`;
 
@@ -80,6 +84,7 @@ export function transformWebhookProduct(webhookProduct) {
     productGroup: structuredTags.get('GROUP') || '',
     vendor: webhookProduct.vendor || '',
     productType: webhookProduct.product_type || '',
+   // collections: collections,  // Include collections in the product schema
     
     attributes: {
       color: attributes.color,

@@ -17,6 +17,7 @@ async function processBatch(products) {
       console.log('Transformed Product Data:', productData);
       
       // Process collection mapping
+      console.log('Processing collections for product:', productData);
       
       const collectionHandles = await getProductsCollectionsHanls(productData.collections);
       // Add collection_handle array to product data

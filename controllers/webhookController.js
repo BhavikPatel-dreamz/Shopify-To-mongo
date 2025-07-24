@@ -26,19 +26,16 @@ export const handleProductUpdate = async (req, res) => {
     // Transform the product data
     const productData = transformWebhookProduct(shopifyProduct);
 
-    const collectionHandles = await getProductsCollectionsHanls(productData.collections);
+   // const collectionHandles = await getProductsCollectionsHanls(productData.collections);
 
 
     // Add collection_handle array to product data
-    productData.collection_handle = collectionHandles;
+    //productData.collection_handle = collectionHandles;
 
     // Update or create the product in database
     await Product.findOneAndUpdate(
       { shopifyId: productData.shopifyId },
-      {
-        ...productData,
-        collection_handle: collectionHandles
-      },
+      productData,
       {
         upsert: true,
         new: true,

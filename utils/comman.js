@@ -17,6 +17,7 @@ const generateCacheKey = (queryParams) => {
 
 const getProductsCollectionsHanls = async (collections) => {
   try {
+    console.log('Fetching collection handles for:', collections);
     // Query only the needed collections by title
     const matchedCollections = await Collection.find(
       { title: { $in: collections } },
