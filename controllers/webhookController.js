@@ -18,13 +18,14 @@ export const handleProductUpdate = async (req, res) => {
     const shopifyProduct = req.body;
 
     console.log(shopifyProduct)
-    const allCollections = await Collection.find({}, { title: 1, handle: 1 }).lean();
+    //
+    // const allCollections = await Collection.find({}, { title: 1, handle: 1 }).lean();
 
-    // Create a map for faster lookup: title -> handle
-    const collectionTitleToHandle = new Map();
-    allCollections.forEach(collection => {
-      collectionTitleToHandle.set(collection.title, collection.handle);
-    });
+    // // Create a map for faster lookup: title -> handle
+    // const collectionTitleToHandle = new Map();
+    // allCollections.forEach(collection => {
+    //   collectionTitleToHandle.set(collection.title, collection.handle);
+    // });
 
 
     // Transform the product data
@@ -32,8 +33,19 @@ export const handleProductUpdate = async (req, res) => {
     let collectionHandles = [];
 
     if (productData.collections && Array.isArray(productData.collections)) {
+      // Query only the needed collections by title
+      const matchedCollections = await Collection.find(
+        { title: { $in: productData.collections } },
+        { title: 1, handle: 1 }
+      ).lean();
+
+      // Create a map for faster lookup: title -> handle
+      const collectionTitleToHandle = new Map();
+      matchedCollections.forEach(collection => {
+        collectionTitleToHandle.set(collection.title, collection.handle);
+      });
+
       productData.collections.forEach(collectionTitle => {
-        // Check if collection title exists in collections table
         if (collectionTitleToHandle.has(collectionTitle)) {
           const handle = collectionTitleToHandle.get(collectionTitle);
           collectionHandles.push(handle);
@@ -121,4 +133,4 @@ export const handleOrderUpdate = async (req, res) => {
     console.error('Error processing order update:', error);
     res.status(500).json({ error: 'Error processing order update' });
   }
-}; 
+};
