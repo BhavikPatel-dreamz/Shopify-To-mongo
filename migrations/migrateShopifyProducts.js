@@ -168,5 +168,5 @@ export const startProductAddedJob = () => {
 //   console.error('Migration failed:', error);
 //   process.exit(1);
 // }); 
-// Update cursor and total processed without lastRun (used during processing)
+
 
