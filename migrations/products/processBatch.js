@@ -49,7 +49,6 @@ async function processBatch(products) {
           if (collectionTitleToHandle.has(collectionTitle)) {
             const handle = collectionTitleToHandle.get(collectionTitle);
             collectionHandles.push(handle);
-            console.log(`Collection matched: "${collectionTitle}" -> "${handle}"`);
           } else {
             console.warn(`Collection not found in collections table: "${collectionTitle}"`);
           }
@@ -58,7 +57,6 @@ async function processBatch(products) {
       
       // Add collection_handle array to product data
       productData.collection_handle = collectionHandles;
-      console.log(productData.collection_handle)
       // Save or update product in MongoDB
       const product = await Product.findOneAndUpdate(
         { shopifyId: productData.shopifyId },
