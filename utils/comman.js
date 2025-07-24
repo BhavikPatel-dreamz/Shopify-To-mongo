@@ -14,7 +14,7 @@ const generateCacheKey = (queryParams) => {
   };
 
 
-export const getProductsCollectionsHanls = async (collections) => {
+const getProductsCollectionsHanls = async (collections) => {
   try {
     // Query only the needed collections by title
     const matchedCollections = await Collection.find(
