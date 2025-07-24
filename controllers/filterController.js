@@ -221,13 +221,21 @@ const buildResponseData = (result, filterParams, currentResultCount, brandsWithS
  */
 const getProductFilters = async (req, res) => {
   try {
-    const filterParams = req.query;
-    const cacheKey = generateFilterCacheKey(filterParams);
+    const { bypassCache = 'false' ,...filterParams } = req.query;
 
-    const cached = filterCache.get(cacheKey);
-    if (cached && filterCache.isValid(cacheKey)) return res.json(cached);
+      const cacheFilters = {
+      ...filterParams
+    };
 
-    console.log('Cache miss - Building new response');
+    const cacheKey = generateFilterCacheKey(cacheFilters);
+
+    if (!bypassCache) {
+      const cached = filterCache.get(cacheKey);
+      if (cached && filterCache.isValid(cacheKey))
+        console.log('Cache hit for products filter');
+        return res.json(cached);
+    }
+
     const currentQuery = await buildSharedQuery(filterParams);
     const selectedBrands = filterParams.brand?.split(',').map(b => b.trim()) || [];
 
@@ -244,7 +252,7 @@ const getProductFilters = async (req, res) => {
       productType: 'productType',
       categories: 'categories',
       collections: 'collections',
-      collection_handle:'collection_handle'
+      collection_handle: 'collection_handle'
     };
 
     const getAvailableGendersForCollection = async (collection_handle) => {
@@ -256,7 +264,7 @@ const getProductFilters = async (req, res) => {
             $and: [
               { isAvailable: true },
               {
-                  collections: collectionsArray
+                collections: collectionsArray
               }
             ]
           }

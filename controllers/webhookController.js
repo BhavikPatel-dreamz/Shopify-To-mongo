@@ -25,15 +25,15 @@ export const handleProductUpdate = async (req, res) => {
     await Product.findOneAndUpdate(
       { shopifyId: productData.shopifyId },
       productData,
-      { 
-        upsert: true, 
+      {
+        upsert: true,
         new: true,
-        runValidators: true
+        runValidators: false
       }
     );
 
     console.log(`Successfully updated product: ${productData.name}`);
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, message: "Successfully updated product" });
 
   } catch (error) {
     console.error('Webhook Error:', error);
