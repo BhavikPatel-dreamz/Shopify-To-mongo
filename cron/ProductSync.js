@@ -104,7 +104,7 @@ async function syncShopifyProducts() {
 };
 
 // Run migration
-export const startProductCleanupJob = () => {
+export const startProductAddedJob = () => {
     cron.schedule('*/5 * * * *', syncShopifyProducts);
     console.log('added product jobs scheduled every 5 minutes');
 }
