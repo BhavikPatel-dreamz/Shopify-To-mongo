@@ -41,16 +41,6 @@ async function updateCursorState(cursor, totalProcessed) {
   }
 }
 
-async function getLastRun() {
-  try {
-    const state = await MigrationState.findOne({ name: 'shopify_products_sync' });
-    return state
-  } catch (error) {
-    console.error('Error fetching last cursor:', error);
-    return null;
-  }
-}
-
 /**
  * Main migration function with pagination
  */

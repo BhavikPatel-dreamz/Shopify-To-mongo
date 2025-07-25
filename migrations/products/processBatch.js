@@ -15,10 +15,6 @@ async function processBatch(products) {
       // Transform Shopify product to our schema
       const productData = transformProduct(shopifyProduct);
       console.log('Transformed Product Data:', productData);
-
-      // const collectionHandles = await getProductsCollectionsHanls(productData.collections);
-      // Add collection_handle array to product data
-     // productData.collection_handle = collectionHandles;
       // Save or update product in MongoDB
       const product = await Product.findOneAndUpdate(
         { shopifyId: productData.shopifyId },
@@ -27,8 +23,7 @@ async function processBatch(products) {
         },
         {
           upsert: true,
-          new: true,
-          runValidators: true // This ensures schema validation
+          new: true
         }
       );
 
