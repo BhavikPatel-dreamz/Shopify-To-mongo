@@ -148,8 +148,20 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
         }
       }
     ]);
+ // min and max only for the collection
+    const collectionPriceStats = await Product.aggregate([
+      { $match: { collection_handle: collectionName } },
+      {
+        $group: {
+          _id: null,
+          minPrice: { $min: '$price' },
+          maxPrice: { $max: '$price' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
     console.log('Collection price stats:', stats[0] );
-    return stats[0] || { minPrice: stats[0]?.minPrice || 0, maxPrice: stats[0]?.maxPrice || 1000, count: 0 };
+    return stats[0] || { minPrice: collectionPriceStats[0]?.minPrice || 0 , maxPrice: collectionPriceStats[0]?.maxPrice || 1000, count: 0 , appliedMin: stats[0]?.minPrice || 0, appliedMax: stats[0]?.maxPrice || 1000};
   } catch (error) {
     console.error('Error getting collection price range:', error);
     return { minPrice: 0, maxPrice: 1000, count: 0 };
@@ -206,8 +218,8 @@ const buildResponseData = (result, filterParams, currentResultCount, brandsWithS
     priceRange: {
       min: Math.floor(priceStats.minPrice || 0),
       max: Math.ceil(priceStats.maxPrice || 1000),
-      appliedMin: filterParams.minPrice ? parseFloat(filterParams.minPrice) : undefined,
-      appliedMax: filterParams.maxPrice ? parseFloat(filterParams.maxPrice) : undefined
+      appliedMin: Math.floor(priceStats.appliedMin || 0),
+      appliedMax: Math.ceil(priceStats.appliedMax || 1000)
     }
   }
 });
