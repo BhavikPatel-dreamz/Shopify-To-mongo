@@ -98,6 +98,8 @@ function transformProduct(shopifyProduct) {
 
   // Extract collection names
   const collections = shopifyProduct.collections.edges.map(({ node }) => node.title);
+  const collection_handle = shopifyProduct.collections.edges.map(({ node }) => node.handle);
+ 
 
   // Combine attributes, tags, and structured tags
   const combinedAttributes = {
@@ -122,6 +124,7 @@ function transformProduct(shopifyProduct) {
     vendor: shopifyProduct.vendor || '',
     productType: shopifyProduct.productType || '',
     collections: collections,  // Include collections in the product schema
+    collection_handle: collection_handle, // Include collection handles
     
     attributes: {
       color: attributes.color || null,
