@@ -31,9 +31,9 @@ async function processBatch(products) {
           runValidators: true // This ensures schema validation
         }
       );
-      
-      console.log(`Product updated with ${collectionHandles.length} collection handles:`, collectionHandles);
-      
+
+     // console.log(`Product updated with ${collection_handle.length} collection handles:`, collection_handle);
+
       // console.log('Saved Product:', {
       //   id: product._id,
       //   shopifyId: product.shopifyId,

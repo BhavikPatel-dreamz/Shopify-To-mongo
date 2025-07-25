@@ -99,7 +99,7 @@ function transformProduct(shopifyProduct) {
   // Extract collection names
   const collections = shopifyProduct.collections.edges.map(({ node }) => node.title);
   const collection_handle = shopifyProduct.collections.edges.map(({ node }) => node.handle);
-  console.log('collection_handles:', collection_handles);
+ 
 
   // Combine attributes, tags, and structured tags
   const combinedAttributes = {
