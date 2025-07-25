@@ -218,8 +218,8 @@ const buildResponseData = (result, filterParams, currentResultCount, brandsWithS
     priceRange: {
       min: Math.floor(priceStats.minPrice || 0),
       max: Math.ceil(priceStats.maxPrice || 1000),
-      appliedMin: filterParams.minPrice ? parseFloat(filterParams.minPrice) : undefined,
-      appliedMax: filterParams.maxPrice ? parseFloat(filterParams.maxPrice) : undefined
+      appliedMin: Math.floor(priceStats.appliedMin || 0),
+      appliedMax: Math.ceil(priceStats.appliedMax || 1000)
     }
   }
 });
