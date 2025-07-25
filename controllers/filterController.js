@@ -131,14 +131,26 @@ const createSimpleFacetPipeline = (field) => [
 const getCollectionPriceRange = async (query, collectionName = null) => {
   try {
     let matchQuery = { ...query };
-
+      console.log('Collection price range query:', matchQuery);
+    console.log('Collection price range query:', matchQuery);
     // If specific collection is provided, add it to the query
     if (collectionName && collectionName !== 'all') {
       matchQuery.collection_handle = collectionName;
     }
 
-    const stats = await Product.aggregate([
-      { $match: matchQuery },
+    // const stats = await Product.aggregate([
+    //   { $match: matchQuery },
+    //   {
+    //     $group: {
+    //       _id: null,
+    //       minPrice: { $min: '$price' },
+    //       maxPrice: { $max: '$price' },
+    //       count: { $sum: 1 }
+    //     }
+    //   }
+    // ]);
+     const data = await Product.aggregate([
+      { $match: matchQuery.collection_handle ? { collection_handle: matchQuery.collection_handle, isAvailable: true } : {} },
       {
         $group: {
           _id: null,
@@ -148,20 +160,8 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
         }
       }
     ]);
- // min and max only for the collection
-    const collectionPriceStats = await Product.aggregate([
-      { $match: { collection_handle: collectionName } },
-      {
-        $group: {
-          _id: null,
-          minPrice: { $min: '$price' },
-          maxPrice: { $max: '$price' },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-    console.log('Collection price stats:', stats[0] );
-    return stats[0] || { minPrice: collectionPriceStats[0]?.minPrice || 0 , maxPrice: collectionPriceStats[0]?.maxPrice || 1000, count: 0 , appliedMin: stats[0]?.minPrice || 0, appliedMax: stats[0]?.maxPrice || 1000};
+
+    return data[0] || { minPrice: data[0]?.minPrice || 0, maxPrice: data[0]?.maxPrice || 1000, count: 0 };
   } catch (error) {
     console.error('Error getting collection price range:', error);
     return { minPrice: 0, maxPrice: 1000, count: 0 };
