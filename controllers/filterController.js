@@ -315,19 +315,22 @@ const getProductFilters = async (req, res) => {
       const [
         brands,
         ...facets
-      ] = await Promise.all([
+        ] = await Promise.all([
         getBrandsWithSelection(facetQueries[0], selectedBrands),
         ...filters.slice(1).map((f, i) =>
           buildFacet(facetQueries[i + 1], f, !['productGroup', 'productType'].includes(f))
         ),
-        getCollectionPriceRange(await buildFacetQuery('price'), filterParams.collections)
+        
       ]);
+
+      const priceStats = await getCollectionPriceRange(currentQuery, filterParams.collection_handle);
 
       const [
         colors, sizes, materials, seasons, genders, fabrics,
-        works, productGroups, productTypes, categories, collections,
-        priceStats
+        works, productGroups, productTypes, categories, collections
       ] = facets;
+
+      
 
       return {
         brands, priceStats, filterResults: {
@@ -342,6 +345,8 @@ const getProductFilters = async (req, res) => {
     // Get current result count and filter options
     const currentResultCount = await Product.countDocuments(currentQuery);
     const { brands, priceStats, filterResults } = await getCommonFacets();
+
+ 
 
     const response = buildResponseData(
       filterResults,
