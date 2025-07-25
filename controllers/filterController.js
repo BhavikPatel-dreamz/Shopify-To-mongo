@@ -148,8 +148,8 @@ const getCollectionPriceRange = async (query, collectionName = null) => {
         }
       }
     ]);
-
-    return stats[0] || { minPrice: 0, maxPrice: 1000, count: 0 };
+    console.log('Collection price stats:', stats[0] );
+    return stats[0] || { minPrice: stats[0]?.minPrice || 0, maxPrice: stats[0]?.maxPrice || 1000, count: 0 };
   } catch (error) {
     console.error('Error getting collection price range:', error);
     return { minPrice: 0, maxPrice: 1000, count: 0 };
