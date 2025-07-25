@@ -4,7 +4,9 @@ import cors from 'cors';
 import connectDB from './config/database.js';
 import routes from './routes/index.js';
 import webhookRoutes from './routes/webhookRoutes.js';
-import { startOrderCleanupJob, startProductCleanupJob, startProductAddedJob } from './cron/cleanupOrders.js';
+import { startOrderCleanupJob } from './cron/cleanupOrders.js';
+import { startProductCleanupJob } from './cron/cleanupProduct.js';
+import { startProductAddedJob } from './cron/ProductSync.js';
 import { startOrderAddedJob } from './migrations/migrateShopifyOrders.js';
 import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
