@@ -16,6 +16,7 @@ export const productsQuery = gql`
           productType
           tags
           vendor
+          status
           createdAt
           updatedAt
           options {

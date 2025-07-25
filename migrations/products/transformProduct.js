@@ -107,6 +107,9 @@ function transformProduct(shopifyProduct) {
     ...Object.fromEntries(structuredTags)
   };
 
+
+  console.log('Extracted Attributes:', shopifyProduct.status);
+
   // Transform to match our Product schema
   const transformedProduct = {
     productId: shopifyProduct.id.replace('gid://shopify/Product/', ''),
@@ -150,23 +153,23 @@ function transformProduct(shopifyProduct) {
     
     productUrl: productUrl,
     
-    isAvailable: shopifyProduct.status == 'active' ? true : false,
+    isAvailable: shopifyProduct.status == 'ACTIVE' ? true : false,
     hasEmbedding: false,
     vectorId: null,
     createdAt: new Date(shopifyProduct.createdAt),
     updatedAt: new Date(shopifyProduct.updatedAt)
   };
 
-  console.log('Transformed Product Structure:', {
-    id: transformedProduct.productId,
-    shopifyId: transformedProduct.shopifyId,
-    name: transformedProduct.name,
-    hasRequiredFields: {
-      name: !!transformedProduct.name,
-      description: !!transformedProduct.description,
-      price: typeof transformedProduct.price === 'number'
-    }
-  });
+  // console.log('Transformed Product Structure:', {
+  //   id: transformedProduct.productId,
+  //   shopifyId: transformedProduct.shopifyId,
+  //   name: transformedProduct.name,
+  //   hasRequiredFields: {
+  //     name: !!transformedProduct.name,
+  //     description: !!transformedProduct.description,
+  //     price: typeof transformedProduct.price === 'number'
+  //   }
+  // });
 
   return transformedProduct;
 }
