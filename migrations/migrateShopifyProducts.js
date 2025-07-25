@@ -70,12 +70,12 @@ async function migrateProducts() {
 
   //const { lastRun } = await getLastRun();
   //sync yesterday's products
-  const updatedAtQuery = `updated_at:>=${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`;
+  // const updatedAtQuery = `updated_at:>=${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`;
 
   while (hasNextPage) {
     try {
       // If cursor is null, it will start from the beginning
-      const data = await shopifyClient.query(productsQuery, { cursor, updatedAtQuery });
+      const data = await shopifyClient.query(productsQuery, { cursor });
       const products = data.products.edges.map(edge => edge.node);
 
       await processBatch(products);
