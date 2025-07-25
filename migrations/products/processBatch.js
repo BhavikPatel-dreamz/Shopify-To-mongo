@@ -16,9 +16,6 @@ async function processBatch(products) {
       const productData = transformProduct(shopifyProduct);
       console.log('Transformed Product Data:', productData);
       
-      // Process collection mapping
-      console.log('Processing collections for product:', productData);
-      
       const collectionHandles = await getProductsCollectionsHanls(productData.collections);
       // Add collection_handle array to product data
       productData.collection_handle = collectionHandles;

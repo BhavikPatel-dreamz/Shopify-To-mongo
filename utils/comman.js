@@ -25,12 +25,13 @@ const getProductsCollectionsHanls = async (collections) => {
     ).lean();
 
     // Create a map for faster lookup: title -> handle
+    const collectionHandel=[]
     const collectionTitleToHandle = new Map();
     matchedCollections.forEach(collection => {
       collectionTitleToHandle.set(collection.title, collection.handle);
+      collectionHandel.push(collection.handle)
     });
-
-    return collectionTitleToHandle;
+    return collectionHandel;
   } catch (error) {
     console.error('Error fetching collections:', error);
     throw error;
