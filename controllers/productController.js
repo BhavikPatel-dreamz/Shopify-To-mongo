@@ -320,7 +320,7 @@ const getBestSellingProducts = async (filters, limit, skip) => {
  */
 const getProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, sort = 'createdAt', order = 'desc', bypassCache = false, ...filters } = req.query;
+    const { page = 1, limit = 20, sort = 'best_seller', order = 'desc', bypassCache = false, ...filters } = req.query;
 
     // Include pagination and sorting in cache key
     const cacheFilters = {
