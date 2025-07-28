@@ -75,7 +75,7 @@ async function syncShopifyProducts() {
   while (hasNextPage) {
     try {
       // If cursor is null, it will start from the beginning
-      const data = await shopifyClient.query(productsQuery, { cursor, updatedAtQuery });
+      const data = await shopifyClient.query(productsQuery, { cursor: null, updatedAtQuery });
       const products = data.products.edges.map(edge => edge.node);
 
       await processBatch(products);
@@ -96,7 +96,7 @@ async function syncShopifyProducts() {
       console.error('Error during migration:', error);
       // Save the current state before breaking
       const endDate = new Date().toISOString()
-      await updateCursorStateOnly(cursor, totalProcessed, endDate);
+      await updateCursorStateOnly('', 0, endDate);
       break;
     }
   }
@@ -105,8 +105,8 @@ async function syncShopifyProducts() {
 
 // Run migration
 export const startProductAddedJob = () => {
-    cron.schedule('*/5 * * * *', syncShopifyProducts);
-    console.log('added product jobs scheduled every 5 minutes');
+    cron.schedule('*/1 * * * *', syncShopifyProducts);
+    console.log('added product jobs scheduled every 1 minute');
 }
 
 
