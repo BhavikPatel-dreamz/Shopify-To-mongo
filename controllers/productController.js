@@ -426,11 +426,11 @@ const getProducts = async (req, res) => {
         }
       };
     }
-
+    /*
     // Store in cache only if not bypassing
-   // if (!bypassCache) {
-      productCache.set(baseKey, response);
-   // }
+    // if (!bypassCache) {
+      // productCache.set(baseKey, response);
+    // }*/
 
     res.json(response);
 
