@@ -219,12 +219,24 @@ async function syncProductsForCollection(collectionId) {
 async function processCollections() {
   try {
 
-      const collections = await CollectionState.find().select('id title');
-    // Process each collection's products
+      const collections = await CollectionState.find();
+      // Process each collection's products
     for (const collection of collections) {
       console.log(`Processing collection: ${collection.title} (${collection.id})`);
 
       try {
+       const existingCollection = await Collection.findOne({ handle: collection.handle });
+        
+        if (!existingCollection) {
+           await Collection.create({
+            handle: collection.handle,
+            title: collection.title,
+            descriptionHtml: collection.body_html || '',
+            shopifyId: `$gid://shopify/Collection/${collection.id}`,
+          });
+          console.log(`Added new collection: ${collection.handle}`);
+        }
+        // Sync products for this collection
         await syncProductsForCollection(collection.id);
       } catch (error) {
         console.error(`Failed to sync products for collection ${collection.id}:`, error);
