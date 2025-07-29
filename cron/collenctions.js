@@ -4,6 +4,7 @@ import { shopifyClient } from '../config/shopify.js';
 import connectDB from '../config/database.js';
 
 import Collection from '../models/Collection.js';
+import CollectionState from '../models/CollectionState.js';
 import SyncState from '../models/SyncState.js'; // New model for storing sync state
 import { productsQuery } from '../graphql/queries/products.js';
 import processBatch from '../migrations/products/processBatch.js';
@@ -206,37 +207,34 @@ async function syncProductsForCollection(collectionId) {
   // Mark sync as completed
   await markSyncCompleted(collectionId, totalProcessed);
   console.log(`Product sync completed for collection ${collectionId}. Total products processed: ${totalProcessed}`);
+  // If no more pages, delete the collection state
+  if (!hasNextPage || cursor === null) {
+    console.log(`No more products to process for collection ${collectionId}. Deleting collection state...`);
+    await CollectionState.deleteOne(
+      { id: collectionId },
+    );
+  }
 }
 
 async function processCollections() {
   try {
-    await connectDB();
-    
-    const collections = await fetchRecentCollections();
-    console.log(`Fetched ${collections.length} recent collections from Shopify.`);
-    
-    if (!collections.length) {
-      console.log('No recent collections to process.');
-      return;
+
+      const collections = await CollectionState.find().select('id title');
+    // Process each collection's products
+    for (const collection of collections) {
+      console.log(`Processing collection: ${collection.title} (${collection.id})`);
+
+      try {
+        await syncProductsForCollection(collection.id);
+      } catch (error) {
+        console.error(`Failed to sync products for collection ${collection.id}:`, error);
+        // Continue with next collection instead of stopping everything
+        continue;
+      }
     }
 
-    await saveCollectionsToDb(collections);
-
-    // // Process each collection's products
-    // for (const collection of collections) {
-    //   console.log(`Processing collection: ${collection.title} (${collection.id})`);
-      
-    //   try {
-    //     await syncProductsForCollection(collection.id);
-    //   } catch (error) {
-    //     console.error(`Failed to sync products for collection ${collection.id}:`, error);
-    //     // Continue with next collection instead of stopping everything
-    //     continue;
-    //   }
-    // }
-    
     console.log('All collections processed successfully.');
-    
+
   } catch (error) {
     console.error('Error in processCollections:', error);
     throw error;
@@ -247,13 +245,13 @@ async function processCollections() {
 async function resumeIncompleteSyncs() {
   try {
     await connectDB();
-    
+
     // Find all collections with incomplete syncs
     const incompleteSyncs = await SyncState.find({ status: 'in_progress' });
-    
+
     if (incompleteSyncs.length > 0) {
       console.log(`Found ${incompleteSyncs.length} incomplete syncs to resume...`);
-      
+
       for (const syncState of incompleteSyncs) {
         console.log(`Resuming sync for collection: ${syncState.collectionId}`);
         try {
@@ -297,12 +295,13 @@ if (process.argv[2] === 'resume') {
 }
 
 // Schedule the cron job to run every 5 minutes (adjust as needed)
-cron.schedule('*/5 * * * *', () => {
-  console.log('Running scheduled collection sync...');
-  processCollections().catch(console.error);
-});
+export const startCollectionJob = () => {
+  cron.schedule('*/5 * * * *', () => {
+    console.log('Running scheduled collection sync...');
+    processCollections().catch(console.error);
+  });
+};
 
-console.log('Collection sync service started. Cron job scheduled to run every 5 minutes.');
 
 // Start initial processing and resume any incomplete syncs on startup
 (async () => {
@@ -316,3 +315,5 @@ console.log('Collection sync service started. Cron job scheduled to run every 5 
     console.error('Error during startup:', error);
   }
 })();
+
+export default startCollectionJob;

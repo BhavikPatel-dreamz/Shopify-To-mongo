@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import { transformWebhookProduct } from '../migrations/products/webhookTransform.js';
+import CollectionState from '../models/CollectionState.js';
 import Order from '../models/Order.js';
 
 import { getProductsCollectionsHanls } from '../utils/comman.js';
@@ -103,5 +104,27 @@ export const handleOrderUpdate = async (req, res) => {
   } catch (error) {
     console.error('Error processing order update:', error);
     res.status(500).json({ error: 'Error processing order update' });
+  }
+};
+
+export const handleCollectionUpdate = async (req, res) => {
+  try {
+    const collectionData = req.body;
+    console.log('Received collection update:', collectionData);
+
+    await CollectionState.findOneAndUpdate(
+      { id: collectionData.id },
+      collectionData,
+      {
+        upsert: true,
+        new: true,
+        runValidators: false
+      }
+    );
+
+    res.status(200).json({ message: 'Collection data processed successfully' });
+  } catch (error) {
+    console.error('Error processing collection update:', error);
+    res.status(500).json({ error: 'Error processing collection update' });
   }
 };
