@@ -8,6 +8,7 @@ import { startOrderCleanupJob } from './cron/cleanupOrders.js';
 import { startProductCleanupJob } from './cron/cleanupProduct.js';
 import { startProductAddedJob } from './cron/ProductSync.js';
 import { startOrderAddedJob } from './migrations/migrateShopifyOrders.js';
+import { startCollectionJob } from  './cron/collenctions.js';
 import ipWhitelist from './middleware/ipWhitelist.js'; // Import the middleware
 
 const app = express();
@@ -25,6 +26,8 @@ startOrderAddedJob();
 startProductAddedJob();
 
 startProductCleanupJob();
+
+startCollectionJob()
 // Middleware
 app.use(cors());
 app.use(json());
