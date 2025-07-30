@@ -61,7 +61,7 @@ export function transformWebhookProduct(webhookProduct) {
     alt: image.alt || ''
   }));
 
-  console.log("&&&***",webhookProduct)
+
 
   //const collections = webhookProduct.collections.edges.map(({ node }) => node.title);
 
