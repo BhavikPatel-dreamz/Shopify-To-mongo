@@ -9,7 +9,7 @@ import SyncState from '../models/SyncState.js'; // New model for storing sync st
 import { productsQuery } from '../graphql/queries/products.js';
 import processBatch from '../migrations/products/processBatch.js';
 
-import Product from '../../models/Product.js';
+import Product from '../models/Product.js';
 
 // Function to save cursor state for resuming later
 async function saveCursorState(collectionId, cursor, totalProcessed) {
