@@ -232,7 +232,7 @@ async function processCollections() {
             handle: collection.handle,
             title: collection.title,
             descriptionHtml: collection.body_html || '',
-            shopifyId: `$gid://shopify/Collection/${collection.id}`,
+            shopifyId: `gid://shopify/Collection/${collection.id}`,
           });
           console.log(`Added new collection: ${collection.handle}`);
         }
