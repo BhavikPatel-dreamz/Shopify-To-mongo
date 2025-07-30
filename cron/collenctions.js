@@ -8,7 +8,8 @@ import CollectionState from '../models/CollectionState.js';
 import SyncState from '../models/SyncState.js'; // New model for storing sync state
 import { productsQuery } from '../graphql/queries/products.js';
 import processBatch from '../migrations/products/processBatch.js';
-import { collectionsQueryUpdate } from '../graphql/queries/collections.js';
+
+import Product from '../../models/Product.js';
 
 // Function to save cursor state for resuming later
 async function saveCursorState(collectionId, cursor, totalProcessed) {
@@ -48,98 +49,8 @@ async function markSyncCompleted(collectionId, totalProcessed) {
   );
 }
 
-async function fetchRecentCollections() {
-  const now = new Date();
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-  const isoTime = fiveMinutesAgo.toISOString();
-  console.log(`Fetching collections updated since: ${isoTime}`);
 
-  let allCollections = [];
-  let hasNextPage = true;
-  let cursor = null;
 
-  // Format the query string for Shopify
-  const updatedSinceQuery = `updated_at:>=${isoTime}`;
-
-  while (hasNextPage) {
-    try {
-      const data = await shopifyClient.query(collectionsQueryUpdate, { 
-        cursor, 
-        updatedSince: updatedSinceQuery 
-      });
-      
-      if (!data || !data.collections || !data.collections.edges) {
-        console.log('No collections data received');
-        break;
-      }
-
-      const collections = data.collections.edges.map(edge => edge.node);
-
-      // save collections to Db
-      await saveCollectionsToDb(collections);
-
-      hasNextPage = data.collections.pageInfo.hasNextPage;
-      cursor = data.collections.pageInfo.endCursor;
-
-      console.log(`Fetched ${collections.length} collections in this batch, total: ${allCollections.length}`);
-
-      // Add delay to avoid rate limiting
-      if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-    } catch (error) {
-      console.error('Error fetching collections from Shopify:', error);
-      throw error;
-    }
-  }
-
-  return allCollections;
-}
-
-async function saveCollectionsToDb(collections) {
-  console.log(`Saving ${collections.length} collections to the database...`);
-
-  try {
-    // Process collections in batches to avoid overwhelming the database
-    const batchSize = 10;
-    const batches = [];
-    
-    for (let i = 0; i < collections.length; i += batchSize) {
-      batches.push(collections.slice(i, i + batchSize));
-    }
-
-    let totalSaved = 0;
-    
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-      const batch = batches[batchIndex];
-      console.log(`Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} collections)`);
-      
-      // Process batch operations in parallel
-      const batchOperations = batch.map(collection => 
-        Collection.updateOne(
-          { id: collection.id },
-          { $set: collection },
-        )
-      );
-      
-      await Promise.all(batchOperations);
-      totalSaved += batch.length;
-      
-      console.log(`Batch ${batchIndex + 1} completed. Total saved so far: ${totalSaved}/${collections.length}`);
-      
-      // Add delay between batches to avoid overwhelming the database
-      if (batchIndex < batches.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-    
-    console.log(`Successfully saved all ${totalSaved} collections to the database.`);
-  } catch (error) {
-    console.error('Error saving collections to database:', error);
-    throw error;
-  }
-}
 
 async function syncProductsForCollection(collectionId) {
   console.log(`Starting product sync for collection: ${collectionId}`);
@@ -236,6 +147,25 @@ async function processCollections() {
           });
           console.log(`Added new collection: ${collection.handle}`);
         }
+
+         // remove Collection handle from the product
+        await Product.updateMany(
+          {
+            $or: [
+              { collection_handle: collection.handle },
+              { collections: collection.title }
+                ]
+              },
+              {
+                $pull: {
+                  collection_handle: collection.handle,
+                  collections: collection.title
+                }
+              }
+            )
+
+        
+
         // Sync products for this collection
         await syncProductsForCollection(collection.id);
       } catch (error) {
