@@ -131,8 +131,6 @@ const createSimpleFacetPipeline = (field) => [
 const getCollectionPriceRange = async (query, collectionName = null) => {
   try {
     let matchQuery = { ...query };
-      console.log('Collection price range query:', matchQuery);
-    console.log('Collection price range query:', matchQuery);
     // If specific collection is provided, add it to the query
     if (collectionName && collectionName !== 'all') {
       matchQuery.collection_handle = collectionName;
@@ -233,7 +231,7 @@ const buildResponseData = (result, filterParams, currentResultCount, brandsWithS
  */
 const getProductFilters = async (req, res) => {
   try {
-    const { bypassCache = 'false' ,...filterParams } = req.query;
+    const { bypassCache = false, ...filterParams } = req.query;
 
       const cacheFilters = {
       ...filterParams
@@ -241,12 +239,13 @@ const getProductFilters = async (req, res) => {
 
     const cacheKey = generateFilterCacheKey(cacheFilters);
 
-    if (!bypassCache) {
+   // if (!bypassCache) {
       const cached = filterCache.get(cacheKey);
-      if (cached && filterCache.isValid(cacheKey))
-        console.log('Cache hit for products filter');
+      if (cached && filterCache.isValid(cacheKey)){
+        console.log('Cache hit for product filters');
         return res.json(cached);
-    }
+      }
+     // }
 
     const currentQuery = await buildSharedQuery(filterParams);
     const selectedBrands = filterParams.brand?.split(',').map(b => b.trim()) || [];
@@ -368,7 +367,10 @@ const getProductFilters = async (req, res) => {
       priceStats
     );
 
-    filterCache.set(cacheKey, response);
+    // Store in cache only if not bypassing
+    if (!bypassCache) {
+      filterCache.set(cacheKey, response);
+    }
     return res.json(response);
 
   } catch (error) {

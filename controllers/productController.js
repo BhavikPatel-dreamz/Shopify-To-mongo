@@ -335,13 +335,13 @@ const getProducts = async (req, res) => {
     const baseKey = generateProductCacheKey(cacheFilters);
 
     // Try to get from cache only if not bypassing
-    if (!bypassCache) {
+   // if (!bypassCache) {
       const cachedResult = productCache.get(baseKey);
       if (cachedResult && productCache.isValid(baseKey)) {
         console.log('Cache hit for products');
         return res.json(cachedResult);
       }
-    }
+   // }
 
     // Calculate pagination
     const pageNum = parseInt(page);
@@ -426,11 +426,11 @@ const getProducts = async (req, res) => {
         }
       };
     }
-    /*
+    
     // Store in cache only if not bypassing
-    // if (!bypassCache) {
-      // productCache.set(baseKey, response);
-    // }*/
+    if (!bypassCache) {
+      productCache.set(baseKey, response);
+     }
 
     res.json(response);
 
