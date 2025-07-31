@@ -103,7 +103,7 @@ async function syncShopifyProducts() {
 
 // Run migration job
 export const startProductAddedJob = () => {
-  cron.schedule('*/1 * * * *', async () => {
+  cron.schedule('*/2 * * * *', async () => {
     try {
       await syncShopifyProducts();
     } catch (error) {
