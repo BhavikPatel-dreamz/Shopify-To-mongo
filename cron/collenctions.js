@@ -136,17 +136,19 @@ async function processCollections() {
       console.log(`Processing collection: ${collection.title} (${collection.id})`);
 
       try {
-       const existingCollection = await Collection.findOne({ handle: collection.handle });
+      //  const existingCollection = await Collection.findOne({ handle: collection.handle });
+      //  console.log(`Checking if collection ${collection.handle} exists in the database...`);
+      //  console.log(`Existing collection: ${existingCollection ? 'Yes' : 'No'}`);
         
-        if (!existingCollection) {
-           await Collection.create({
-            handle: collection.handle,
-            title: collection.title,
-            descriptionHtml: collection.body_html || '',
-            shopifyId: `gid://shopify/Collection/${collection.id}`,
-          });
-          console.log(`Added new collection: ${collection.handle}`);
-        }
+      //   if (!existingCollection) {
+      //      await Collection.create({
+      //       handle: collection.handle,
+      //       title: collection.title,
+      //       descriptionHtml: collection.body_html || '',
+      //       shopifyId: `gid://shopify/Collection/${collection.id}`,
+      //     });
+      //     console.log(`Added new collection: ${collection.handle}`);
+      //   }
 
          // remove Collection handle from the product
         await Product.updateMany(
