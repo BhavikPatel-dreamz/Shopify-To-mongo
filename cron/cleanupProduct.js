@@ -19,6 +19,6 @@ const cleanupProducts = async () => {
 };
 
 export const startProductCleanupJob = () => {
-    cron.schedule('*/15 * * * *', cleanupProducts);
-    console.log('Cleanup jobs scheduled every 15 minutes');
+     cron.schedule('0 */3 * * *', cleanupProducts);
+    console.log('Cleanup jobs scheduled every 3 hours');
 }
