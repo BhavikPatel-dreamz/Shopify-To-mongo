@@ -36,21 +36,37 @@ const generateFilterCacheKey = (filters) => {
  * Normalizes a string value for consistent comparison
  * Converts to lowercase, trims, and removes extra spaces
  */
+// const normalizeValue = (value) => {
+//   if (!value) return '';
+
+//   // Standard normalization - always return a string
+//   const normalized = value
+//     .toString()
+//     .replace(/-/g, ' ')          // Replace all hyphens with spaces
+//     .replace(/'s$/i, '')         // Remove trailing 's
+//     .replace(/s$/i, '')          // Remove plural s
+//     .trim()
+//     .toLowerCase()
+//     .replace(/\b(?!\$)(\d+)\b/g, '$$$1');  // Add $ sign before numbers only if not already present
+//   return normalized;
+// };
+
 const normalizeValue = (value) => {
   if (!value) return '';
-
+  
   // Standard normalization - always return a string
   const normalized = value
     .toString()
-    .replace(/-/g, ' ')          // Replace all hyphens with spaces
-    .replace(/'s$/i, '')         // Remove trailing 's
-    .replace(/s$/i, '')          // Remove plural s
+    .replace(/-/g, ' ') // Replace all hyphens with spaces
+    .replace(/'s$/i, '') // Remove trailing 's
     .trim()
     .toLowerCase()
-    .replace(/\b(?!\$)(\d+)\b/g, '$$$1');  // Add $ sign before numbers only if not already present
+    // Only remove plural 's' if the word is longer than 1 character
+    .replace(/\b\w{2,}s$/i, (match) => match.slice(0, -1))
+    .replace(/\b(?!\$)(\d+)\b/g, '$$1'); // Add $ sign before numbers only if not already present
+  
   return normalized;
 };
-
 /**
  * Creates a regex pattern for matching normalized values
  */
