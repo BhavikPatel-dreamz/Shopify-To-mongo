@@ -83,9 +83,10 @@ function transformProduct(shopifyProduct) {
       if (!value) {
         [category, value] = tag.split('-');
       }
-      if (value) {
-        structuredTags.set(category.toLowerCase(), value.toLowerCase());
-      }
+        if (value) {
+      const key = category.toLowerCase().replace(/\./g, '[dot]');
+      structuredTags[key] = value.toLowerCase();
+    }
     });
   }
 
