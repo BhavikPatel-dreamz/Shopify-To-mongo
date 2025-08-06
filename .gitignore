@@ -62,3 +62,6 @@ jspm_packages/
 .idea/
 .vscode/
 *.sublime-workspace 
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat

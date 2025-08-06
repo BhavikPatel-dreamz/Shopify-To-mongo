@@ -4,6 +4,9 @@ import userInteractionController from '../controllers/userInteractionController.
 import embeddingController from '../controllers/embeddingController.js';
 import productController from '../controllers/productController.js';
 import filterController from '../controllers/filterController.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 const router = express.Router();
 
@@ -52,4 +55,4 @@ router.get('/products/filters', filterController.getProductFilters);
 // Get product sales statistics
 router.get('/products/sales-stats', productController.getProductSalesStats);
 
-export default router; 
+export default router;

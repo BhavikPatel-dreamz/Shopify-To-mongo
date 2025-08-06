@@ -31,11 +31,19 @@ const createCaseInsensitivePatterns = (values) => {
   return Array.isArray(values) ? values : [values];
 };
 
-const createCaseInsensitivePatternsCollentions = (values) => {
-  return terms.map(term => {
-    const normalized = normalizeSearchTerm(term);
-    return { $regex: new RegExp(`^${escapeStringRegexp(normalized)}$`, 'i') };
-  });
+
+const createCaseInsensitivePatternsCollentions = (field, values) => {
+  if (!values) return [];
+
+  if (typeof values === 'string') {
+    values = values.split(',').map(v => v.trim());
+  }
+
+  const list = Array.isArray(values) ? values : [values];
+
+  return list.map(value => ({
+    [field]: { $regex: new RegExp(value, 'i') }
+  }));
 };
 
 const normalizeSearchTerm = (term) => {
@@ -185,9 +193,15 @@ export const buildSharedQuery = async (queryParams) => {
   if (productType) {
     query.productType = { $in: createCaseInsensitivePatterns(productType) };
   }
-
   if (brand) {
-    query.brand = { $in: createCaseInsensitivePatterns(brand) };
+    const brandOrConditions = createCaseInsensitivePatternsCollentions('brand', brand);
+
+    if (brandOrConditions.length) {
+      query.$or = brandOrConditions;
+    }
+    // if (brand) {
+    //   query.brand = { $in: createCaseInsensitivePatterns(brand) };
+    // }
   }
 
   if (fabric) {
@@ -318,39 +332,47 @@ const getBestSellingProducts = async (filters, limit, skip) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
+
 const getProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, sort = 'best_seller', order = 'desc', bypassCache = false, ...filters } = req.query;
+    let {
+      page = 1,
+      limit = 20,
+      sort = 'best_seller',
+      order = 'desc',
+      bypassCache = false,
+      ...filters
+    } = req.query;
 
-    // Include pagination and sorting in cache key
-    const cacheFilters = {
-      ...filters,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort,
-      order
-    };
-
-    // Generate a specific cache key for products
-    const baseKey = generateProductCacheKey(cacheFilters);
-
-    // Try to get from cache only if not bypassing
-   // if (!bypassCache) {
-      const cachedResult = productCache.get(baseKey);
-      if (cachedResult && productCache.isValid(baseKey)) {
-        console.log('Cache hit for products');
-        return res.json(cachedResult);
-      }
-   // }
-
-    // Calculate pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
+     if (filters['vendors?q']) {
+      filters.brand = filters['vendors?q']; // Assign value to 'brand'
+      delete filters['vendors?q'];          // Remove original key
+    }
+
+    // 🔐 Cache key
+    const cacheFilters = {
+      ...filters,
+      page: pageNum,
+      limit: limitNum,
+      sort,
+      order
+    };
+
+    const baseKey = generateProductCacheKey(cacheFilters);
+
+    // 💾 Try cache
+    const cachedResult = productCache.get(baseKey);
+    if (!bypassCache && cachedResult && productCache.isValid(baseKey)) {
+      console.log('Cache hit for products');
+      return res.json(cachedResult);
+    }
+
     let response;
 
-    // Handle best seller sorting separately
     if (sort === 'best_seller') {
       const { products, total } = await getBestSellingProducts(filters, limitNum, skip);
 
@@ -364,16 +386,14 @@ const getProducts = async (req, res) => {
             limit: limitNum,
             pages: Math.ceil(total / limitNum)
           },
-          filters: req.query,
+          filters,
           totalAvailableProducts: total
         }
       };
     } else {
-      // Handle other sorting options
       const query = await buildSharedQuery(filters);
       console.log('query', query);
 
-      // Determine sort order
       let sortOptions = {};
       switch (sort) {
         case 'featured':
@@ -401,13 +421,8 @@ const getProducts = async (req, res) => {
           sortOptions = { createdAt: -1 };
       }
 
-      // Execute query with pagination
       const [products, total] = await Promise.all([
-        Product.find(query)
-          .sort(sortOptions)
-          .skip(skip)
-          .limit(limitNum)
-          .lean(),
+        Product.find(query).sort(sortOptions).skip(skip).limit(limitNum).lean(),
         Product.countDocuments(query)
       ]);
 
@@ -421,7 +436,7 @@ const getProducts = async (req, res) => {
             limit: limitNum,
             pages: Math.ceil(total / limitNum)
           },
-          filters: req.query,
+          filters,
           totalAvailableProducts: total
         }
       };

@@ -249,6 +249,10 @@ const getProductFilters = async (req, res) => {
   try {
     const { bypassCache = false, ...filterParams } = req.query;
 
+      if (filterParams['vendors?q']) {
+      filterParams.brand = filterParams['vendors?q']; // Assign value to 'brand'
+      delete filterParams['vendors?q'];          // Remove original key
+    }
       const cacheFilters = {
       ...filterParams
     };
